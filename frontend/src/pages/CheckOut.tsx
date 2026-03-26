@@ -1,26 +1,38 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, ArrowUpCircle, Printer, X, Trash2, ShoppingCart } from 'lucide-react';
 import { itemAPI, productAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useLocation } from '../context/LocationContext';
 import { useLoading } from '../context/LoadingContext';
 import { toast } from 'react-toastify';
- 
+
 const CheckOut: React.FC = () => {
   const [searchValue, setSearchValue] = useState('');
+  const [allItems, setAllItems] = useState<any[]>([]);
   const [scannedItems, setScannedItems] = useState<any[]>([]);
   const [showBill, setShowBill] = useState(false);
   const [billData, setBillData] = useState<any>(null);
   const [todayStats, setTodayStats] = useState({ checkInCount: 0, checkOutCount: 0 });
-  
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
   const { user } = useAuth();
   const { selectedLocation } = useLocation();
   const { showLoading, hideLoading } = useLoading();
 
   useEffect(() => {
     fetchTodayStats();
+    fetchAllItems();
   }, []);
+
+  const fetchAllItems = async () => {
+    try {
+      const response = await itemAPI.getItems();
+      setAllItems(response.data);
+    } catch (error) {
+      console.error('Error fetching items:', error);
+    }
+  };
 
   const fetchTodayStats = async () => {
     try {
@@ -31,50 +43,42 @@ const CheckOut: React.FC = () => {
     }
   };
 
-  const handleSearch = async () => {
-    if (!searchValue.trim()) {
+  const handleSearch = (value?: string) => {
+    const query = (value ?? searchValue).trim().toLowerCase();
+    if (!query) {
       toast.error('Please enter item code or barcode');
       return;
     }
 
-    showLoading('Searching item...');
-    try {
-      let response;
-      if (searchValue.startsWith('INV') || searchValue.length > 10) {
-        response = await itemAPI.getItemByBarcode(searchValue);
-      } else {
-        response = await itemAPI.getItemByCode(searchValue);
-      }
+    const item = allItems.find(
+      (i) =>
+        i.itemCode.toLowerCase() === query ||
+        (i.barcode && i.barcode.toLowerCase() === query)
+    );
 
-      const item = response.data;
-      
-      if (item) {
-        addItemToBatch(item);
-        setSearchValue('');
-        toast.success('Item added');
-      } else {
-        toast.error('Item not found');
-      }
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Item not found');
-    } finally {
-      hideLoading();
+    if (item) {
+      addItemToBatch(item);
+      setSearchValue('');
+      toast.success('Item added');
+    } else {
+      toast.error('Item not found');
       setSearchValue('');
     }
+    searchInputRef.current?.focus();
   };
 
   const addItemToBatch = (item: any) => {
     const existing = scannedItems.find(i => i.itemId === item.itemId);
     if (existing) {
-      setScannedItems(scannedItems.map(i => 
-        i.itemId === item.itemId 
+      setScannedItems(scannedItems.map(i =>
+        i.itemId === item.itemId
           ? { ...i, quantity: i.quantity + parseFloat(item.defaultDecrease || '1') }
           : i
       ));
     } else {
-      setScannedItems([...scannedItems, { 
-        ...item, 
-        quantity: parseFloat(item.defaultDecrease || '1'), 
+      setScannedItems([...scannedItems, {
+        ...item,
+        quantity: parseFloat(item.defaultDecrease || '1'),
         price: item.purchasePrice,
         notes: ''
       }]);
@@ -82,9 +86,7 @@ const CheckOut: React.FC = () => {
   };
 
   const updateItemQuantity = (itemId: string, quantity: number) => {
-    setScannedItems(scannedItems.map(i => 
-      i.itemId === itemId ? { ...i, quantity } : i
-    ));
+    setScannedItems(scannedItems.map(i => (i.itemId === itemId ? { ...i, quantity } : i)));
   };
 
   const removeItem = (itemId: string) => {
@@ -93,7 +95,6 @@ const CheckOut: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (scannedItems.length === 0) {
       toast.error('Please add items first');
       return;
@@ -129,13 +130,12 @@ const CheckOut: React.FC = () => {
 
       setShowBill(true);
       toast.success(`${response.data.count} items checked out successfully`);
-      
       if (response.data.errors?.length > 0) {
         toast.warning(`${response.data.errors.length} items failed`);
       }
-      
       setScannedItems([]);
       fetchTodayStats();
+      fetchAllItems();
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Check-out failed');
     } finally {
@@ -143,14 +143,8 @@ const CheckOut: React.FC = () => {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const closeBill = () => {
-    setShowBill(false);
-    setBillData(null);
-  };
+  const handlePrint = () => window.print();
+  const closeBill = () => { setShowBill(false); setBillData(null); };
 
   return (
     <div>
@@ -173,23 +167,22 @@ const CheckOut: React.FC = () => {
           <div className="space-y-3">
             <div className="flex gap-2">
               <input
+                ref={searchInputRef}
                 type="text"
                 value={searchValue}
-                onChange={(e) => setSearchValue(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSearchValue(val);
+                  if (val.length > 10) handleSearch(val);
+                }}
                 onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
                 placeholder="Enter Item Code or Barcode"
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 autoFocus
               />
-              {/* <button
-                onClick={() => setShowScanner(true)}
-                className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors"
-              >
-                <Scan size={20} />
-              </button> */}
             </div>
             <button
-              onClick={handleSearch}
+              onClick={() => handleSearch()}
               className="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
             >
               <Search size={20} />
@@ -202,10 +195,7 @@ const CheckOut: React.FC = () => {
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Items ({scannedItems.length})</h2>
             {scannedItems.length > 0 && (
-              <button
-                onClick={() => setScannedItems([])}
-                className="text-red-600 hover:text-red-800 text-sm"
-              >
+              <button onClick={() => setScannedItems([])} className="text-red-600 hover:text-red-800 text-sm">
                 Clear All
               </button>
             )}
@@ -227,21 +217,15 @@ const CheckOut: React.FC = () => {
                       <p className="text-sm text-gray-600">{item.itemCode}</p>
                       <p className="text-xs text-gray-500">Stock: {item.currentQty} {item.quantityType || 'unit'}</p>
                     </div>
-                    <button
-                      onClick={() => removeItem(item.itemId)}
-                      className="text-red-600 hover:text-red-800"
-                    >
+                    <button onClick={() => removeItem(item.itemId)} className="text-red-600 hover:text-red-800">
                       <Trash2 size={18} />
                     </button>
                   </div>
-                   <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-xs text-gray-600">Quantity pack<br/>
-                      <div>
-                        {`${item.quantity}* ${item.packQty}= ${item.quantity*item.packQty}${item.quantityType || 'pack'}`}
-                      </div>
+                      <label className="text-xs text-gray-600">Quantity pack<br />
+                        <div>{`${item.quantity}* ${item.packQty}= ${item.quantity * item.packQty}${item.quantityType || 'pack'}`}</div>
                       </label>
-
                       <input
                         type="number"
                         value={item.quantity}
@@ -252,15 +236,10 @@ const CheckOut: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-600">Current Stock <br/>
-                         <div>
-                        {`${item.currentQty}* ${item.packQty}= ${item.currentQty*item.packQty}${item.quantityType || 'pack'}`}
-                      </div>
+                      <label className="text-xs text-gray-600">Current Stock<br />
+                        <div>{`${item.currentQty}* ${item.packQty}= ${item.currentQty * item.packQty}${item.quantityType || 'pack'}`}</div>
                       </label>
-
-                      <div className="px-2 py-1 bg-gray-100 rounded text-sm font-medium">
-                        {item.currentQty} pack
-                      </div>
+                      <div className="px-2 py-1 bg-gray-100 rounded text-sm font-medium">{item.currentQty} pack</div>
                     </div>
                   </div>
                 </div>
@@ -288,14 +267,10 @@ const CheckOut: React.FC = () => {
                 <X size={24} />
               </button>
             </div>
-
             <div className="space-y-4 mb-6">
               <div className="border-b pb-4">
-                <div className="inline-block px-4 py-2 rounded-lg font-semibold bg-red-100 text-red-700">
-                  CHECK-OUT
-                </div>
+                <div className="inline-block px-4 py-2 rounded-lg font-semibold bg-red-100 text-red-700">CHECK-OUT</div>
               </div>
-
               <div className="space-y-2">
                 {billData.items?.map((item: any, idx: number) => (
                   <div key={idx} className="flex justify-between text-sm">
@@ -304,7 +279,6 @@ const CheckOut: React.FC = () => {
                   </div>
                 ))}
               </div>
-
               <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Total Items:</span>
@@ -315,35 +289,17 @@ const CheckOut: React.FC = () => {
                   <span>€{billData.totalAmount.toFixed(2)}</span>
                 </div>
               </div>
-
               <div className="border-t pt-4 space-y-1 text-sm text-gray-600">
-                <div className="flex justify-between">
-                  <span>Location:</span>
-                  <span>{billData.location}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>User:</span>
-                  <span>{billData.user}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Date & Time:</span>
-                  <span>{billData.timestamp}</span>
-                </div>
+                <div className="flex justify-between"><span>Location:</span><span>{billData.location}</span></div>
+                <div className="flex justify-between"><span>User:</span><span>{billData.user}</span></div>
+                <div className="flex justify-between"><span>Date & Time:</span><span>{billData.timestamp}</span></div>
               </div>
             </div>
-
             <div className="flex gap-2 print:hidden">
-              <button
-                onClick={handlePrint}
-                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
-              >
-                <Printer size={20} />
-                Print Bill
+              <button onClick={handlePrint} className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg transition-colors flex items-center justify-center gap-2">
+                <Printer size={20} />Print Bill
               </button>
-              <button
-                onClick={closeBill}
-                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 rounded-lg transition-colors"
-              >
+              <button onClick={closeBill} className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 rounded-lg transition-colors">
                 Close
               </button>
             </div>

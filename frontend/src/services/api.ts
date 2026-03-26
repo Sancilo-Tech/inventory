@@ -139,6 +139,11 @@ export const invoiceAPI = {
   deleteInvoice: (invoiceId: string) => api.delete(`/invoice/delete/${invoiceId}`),
   getUpcomingAlerts: (params?:any) => api.get('/invoice/upcoming-alerts',{params}),
   sendInvoiceEmail: (data: any) => api.post('/invoice/send-email', data),
+  createAutoInvoice: (data: any) => api.post('/invoice/auto/create', data),
+  getAllAutoInvoices: () => api.get('/invoice/auto/all'),
+  updateAutoInvoiceStatus: (invoiceId: string, data: any) => api.put(`/invoice/auto/update-status/${invoiceId}`, data),
+  updateAutoInvoiceDetail: (invoiceId: string, data: any) => api.put(`/invoice/auto/update/${invoiceId}`, data),
+  deleteAutoInvoice: (invoiceId: string) => api.delete(`/invoice/auto/delete/${invoiceId}`),
 };
 
 export const dashboardAPI = {

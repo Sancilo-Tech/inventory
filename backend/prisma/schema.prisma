@@ -206,7 +206,7 @@ enum invoiceType {
 
 model Invoice {
   invoiceId      String        @id @default(uuid()) @map("invoice_id") @db.Uuid
-  invoiceNumber  String        @unique @map("invoice_number") @db.VarChar(100)
+  invoiceNumber  String        @map("invoice_number") @db.VarChar(100)
   invoiceName    String        @map("invoice_name") @db.VarChar(200)
   supplierId     String?       @map("supplier_id") @db.Uuid
   amount         Decimal       @db.Decimal(10, 2)
@@ -221,7 +221,25 @@ model Invoice {
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
   invoiceType    invoiceType   @default(purchase) @map("invoice_type")
+  @@unique([invoiceNumber,invoiceType])
   @@map("invoices")
+}
+
+model AutoInvoice {
+  invoiceId      String        @id @default(uuid()) @map("invoice_id") @db.Uuid
+  invoiceName    String        @map("invoice_name") @db.VarChar(200)
+  supplierId     String?       @map("supplier_id") @db.Uuid
+  amount         Decimal       @db.Decimal(10, 2)
+  dueDate        Int           @map("due_date")
+  notes          String?
+  frequency      String?       
+  locationId     String        @map("location_id") @db.Uuid
+  createdBy      String        @map("created_by") @db.Uuid
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  invoiceType    invoiceType   @default(purchase) @map("invoice_type")
+  isDisable       Boolean       @default(false) @map("is_disable")
+  @@map("auto_invoices")
 }
 
 enum UserType {

@@ -15,4 +15,13 @@ route.delete("/delete/:invoiceId", asyncHandler(InvoiceController.deleteInvoice)
 route.get("/upcoming-alerts", asyncHandler(InvoiceController.getUpcomingAlerts));
 route.post("/send-email", asyncHandler(InvoiceController.sendInvoiceEmail));
 
+// auto invoice
+route.post("/auto/create", asyncHandler(InvoiceController.autoInvoice));
+route.get("/auto/all", asyncHandler(InvoiceController.getAllAutoInvoices));
+route.put("/auto/update-status/:invoiceId", asyncHandler(InvoiceController.updateAutoInvoiceStatus));
+route.put("/auto/update/:invoiceId", asyncHandler(InvoiceController.updateAutoInvoiceDetail));
+route.delete("/auto/delete/:invoiceId", asyncHandler(InvoiceController.deleteAutoInvoice));
+
+
+
 export default route;

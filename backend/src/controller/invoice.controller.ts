@@ -297,4 +297,104 @@ export class InvoiceController {
             next(err);
         }
     }
+    // auto invoice
+static async autoInvoice(req: any, res: Response, next: NextFunction) {
+        try {
+            const locationId = req.headers.location_id;
+            const { supplier_id, amount, due_date, notes, invoiceType,invoice_name,frequency} = req.body;
+
+            if (!locationId) {
+                res.status(400).json({ message: "Location ID required" });
+                return;
+            }
+
+            const newInvoice = await prisma.autoInvoice.create({
+                data: {
+                    invoiceName: invoice_name,
+                    supplierId: supplier_id || null,
+                    amount: amount,
+                    dueDate:due_date ,
+                    notes: notes || null,
+                    locationId: locationId,
+                    invoiceType: invoiceType,
+                    createdBy: req.user.id,
+                    frequency:frequency
+                }
+            });
+
+            res.status(201).json(newInvoice);
+        } catch (err) {
+            next(err);
+        }
+    }
+    static async getAllAutoInvoices(req: any, res: Response, next: NextFunction) {
+        try {
+            const locationId = req.headers.location_id;
+            if (!locationId) {
+                res.status(400).json({ message: "Location ID required" });
+                return;
+            }
+
+            const invoices = await prisma.autoInvoice.findMany({
+                where: { locationId: locationId },
+                orderBy: { createdAt: 'desc' }
+            });
+
+            res.status(200).json(invoices);
+        } catch (err) {
+            next(err);
+        }
+    }
+    static async updateAutoInvoiceStatus(req: any, res: Response, next: NextFunction) {
+        try {
+            const { invoiceId } = req.params;
+            const { isDisable } = req.body;
+
+            const updatedInvoice = await prisma.autoInvoice.update({
+                where: { invoiceId: invoiceId },
+                data: { isDisable: isDisable }
+            });
+
+            res.status(200).json(updatedInvoice);
+        } catch (err) {
+            next(err);
+        }
+    }
+    static async updateAutoInvoiceDetail(req:any,res:Response,next:NextFunction){
+        try {
+            const { invoiceId } = req.params;
+            const { invoiceName, supplier_id, amount,due_date, notes, invoiceType,frequency } = req.body;
+            const updatedInvoice = await prisma.autoInvoice.update({
+                where: { invoiceId: invoiceId },
+                data: {
+                    invoiceName: invoiceName,
+                    supplierId: supplier_id || null,
+                    amount: amount,
+                    dueDate:due_date,
+                    notes: notes || null,
+                    invoiceType: invoiceType,
+                    frequency:frequency
+                }
+            }); 
+            res.send(updatedInvoice)
+        }catch(err){
+            next(err)
+        }
+
+    }
+    static async deleteAutoInvoice(req: any, res: Response, next: NextFunction) {
+        try {
+            const { invoiceId } = req.params;
+
+            await prisma.autoInvoice.delete({
+                where: { invoiceId: invoiceId }
+            });
+
+            res.status(200).json({ message: "Invoice deleted successfully" });
+        } catch (err) {
+            next(err);
+        }
+    }
 }
+
+

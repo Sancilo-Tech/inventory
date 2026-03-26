@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLocation } from '../context/LocationContext';
 import { useLoading } from '../context/LoadingContext';
 import { toast } from 'react-toastify';
-
+ 
 const CheckOut: React.FC = () => {
   const [searchValue, setSearchValue] = useState('');
   const [scannedItems, setScannedItems] = useState<any[]>([]);
@@ -59,6 +59,7 @@ const CheckOut: React.FC = () => {
       toast.error(error.response?.data?.message || 'Item not found');
     } finally {
       hideLoading();
+      setSearchValue('');
     }
   };
 

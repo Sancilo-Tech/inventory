@@ -11,8 +11,88 @@ export const startScheduler = () => {
     console.log("Running daily report scheduler...");
     await sendDailyReport();
   });
+  cron.schedule("0 6 * * *", async () => {
+    console.log("Running daily morning scheduler...");
+    const data = await prisma.autoInvoice.findMany({
+      where: {
+        frequency: 'daily',
+        isDisable: false,
+      }
+    })
+    
+ console.log(data)
+ data.map((datax)=>{
+  createInvoice(datax)
+
+ })   
+  });
+  cron.schedule("0 6 * * 1", async () => {
+    console.log("Running monday morning scheduler...");
+    const data = await prisma.autoInvoice.findMany({
+      where: {
+        frequency: 'weekly',
+        isDisable: false
+      }
+    })
+    data.map((datax)=>{
+      createInvoice(datax)
+
+    })
+    
+  });
+  cron.schedule("0 6 1 * *", async () => {
+    console.log("Running month day1 morning scheduler...");
+    const data = await prisma.autoInvoice.findMany({
+      where: {
+        frequency: 'monthly',
+        isDisable: false
+      }
+    })
+    data.map((datax)=>{
+      createInvoice(datax)
+    })
+    
+  });
+  cron.schedule("0 6 1 1 *", async () => {
+    console.log("Running month day1 morning scheduler...");
+    const data = await prisma.autoInvoice.findMany({
+      where: {
+        frequency: 'yearly',
+        isDisable: false
+      }
+    })
+    data.map((datax)=>{
+      createInvoice(datax)
+    })
+    
+  });
 };
 
+const createInvoice = async (data: any) => {
+  try {
+    const date = new Date()
+    const invoiceNumber = await generateNextInvoiceNumber(data.invoiceType)
+    const invoice = await prisma.invoice.create({
+      data: {
+        invoiceNumber,
+        invoiceName: data.invoiceName,
+        amount: data.amount,
+        invoiceDate: new Date(),
+        dueDate: new Date(Date.now() + Number(data.dueDate) * 24 * 60 * 60 * 1000),
+        status: 'pending',
+        notes: data.notes,
+        createdBy: data.createdBy,
+        locationId: data.locationId,
+        supplierId: data.supplierId || null,
+        invoiceType: data.invoiceType || null
+      }
+    })
+    console.log(invoice)
+    return invoice
+  } catch (err) {
+    console.log(err)
+  }
+}
 const sendDailyReport = async () => {
   try {
     // Fetch users with email notifications enabled (admin and analyzer)
@@ -228,7 +308,7 @@ const sendEmailWithAttachment = async (
       },
     ],
   };
-  if(users.length > 1) {
+  if (users.length > 1) {
     message.bcc = users.slice(1).map((u) => u.email);
   }
   try {
@@ -241,3 +321,29 @@ const sendEmailWithAttachment = async (
   }
 };
 
+
+
+export const generateNextInvoiceNumber = async (type:'general'|'purchase'): Promise<string> => {
+  const allInvoices = await prisma.invoice.findMany({
+    where:{invoiceType:type},
+    select: { invoiceNumber: true }
+  });
+
+  if (allInvoices.length === 0) return 'INV1001';
+
+  let maxNum = 0;
+  let prefix = 'INV';
+
+  allInvoices.forEach(({ invoiceNumber }) => {
+    const match = invoiceNumber.trim().match(/^([A-Za-z]*)(\d+)$/);
+    if (match) {
+      const num = parseInt(match[2], 10);
+      if (num > maxNum) {
+        maxNum = num;
+        prefix = match[1];
+      }
+    }
+  });
+
+  return `${prefix}${maxNum + 1}`;
+};

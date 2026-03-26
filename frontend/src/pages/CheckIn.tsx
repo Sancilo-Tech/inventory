@@ -1,19 +1,29 @@
-﻿/* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useEffect } from 'react';
-import { Search, ArrowDownCircle, Printer, X, Trash2, ShoppingCart } from 'lucide-react';
-import { itemAPI, productAPI } from '../services/api';
-import { useAuth } from '../context/AuthContext';
-import { useLocation } from '../context/LocationContext';
-import { useLoading } from '../context/LoadingContext';
-import { toast } from 'react-toastify';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import React, { useState, useEffect } from "react";
+import {
+  Search,
+  ArrowDownCircle,
+  Printer,
+  X,
+  Trash2,
+  ShoppingCart,
+} from "lucide-react";
+import { itemAPI, productAPI } from "../services/api";
+import { useAuth } from "../context/AuthContext";
+import { useLocation } from "../context/LocationContext";
+import { useLoading } from "../context/LoadingContext";
+import { toast } from "react-toastify";
 
 const CheckIn: React.FC = () => {
-  const [searchValue, setSearchValue] = useState('');
+  const [searchValue, setSearchValue] = useState("");
   const [scannedItems, setScannedItems] = useState<any[]>([]);
   const [showBill, setShowBill] = useState(false);
   const [billData, setBillData] = useState<any>(null);
-  const [todayStats, setTodayStats] = useState({ checkInCount: 0, checkOutCount: 0 });
-  
+  const [todayStats, setTodayStats] = useState({
+    checkInCount: 0,
+    checkOutCount: 0,
+  });
+
   const { user } = useAuth();
   const { selectedLocation } = useLocation();
   const { showLoading, hideLoading } = useLoading();
@@ -27,93 +37,103 @@ const CheckIn: React.FC = () => {
       const response = await productAPI.getTodayStats();
       setTodayStats(response.data);
     } catch (error) {
-      console.error('Error fetching stats:', error);
+      console.error("Error fetching stats:", error);
     }
   };
 
   const handleSearch = async () => {
     if (!searchValue.trim()) {
-      toast.error('Please enter item code or barcode');
+      toast.error("Please enter item code or barcode");
       return;
     }
 
-    showLoading('Searching item...');
+    showLoading("Searching item...");
     try {
       let response;
-      if (searchValue.startsWith('INV') || searchValue.length > 10) {
+      if (searchValue.startsWith("INV") || searchValue.length > 10) {
         response = await itemAPI.getItemByBarcode(searchValue);
       } else {
         response = await itemAPI.getItemByCode(searchValue);
       }
 
       const item = response.data;
-      
+
       if (item) {
         addItemToBatch(item);
-        setSearchValue('');
-        toast.success('Item added');
+        setSearchValue("");
+        toast.success("Item added");
       } else {
-        toast.error('Item not found');
+        toast.error("Item not found");
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Item not found');
+      toast.error(error.response?.data?.message || "Item not found");
     } finally {
       hideLoading();
+      setSearchValue("");
     }
   };
 
   const addItemToBatch = (item: any) => {
-    const existing = scannedItems.find(i => i.itemId === item.itemId);
+    const existing = scannedItems.find((i) => i.itemId === item.itemId);
     if (existing) {
-      setScannedItems(scannedItems.map(i => 
-        i.itemId === item.itemId 
-          ? { ...i, quantity: i.quantity + parseFloat(item.defaultIncrease || '1') }
-          : i
-      ));
+      setScannedItems(
+        scannedItems.map((i) =>
+          i.itemId === item.itemId
+            ? {
+                ...i,
+                quantity: i.quantity + parseFloat(item.defaultIncrease || "1"),
+              }
+            : i,
+        ),
+      );
     } else {
-      setScannedItems([...scannedItems, { 
-        ...item, 
-        quantity: parseFloat(item.defaultIncrease || '1'), 
-        price: item.purchasePrice,
-        notes: ''
-      }]);
+      setScannedItems([
+        ...scannedItems,
+        {
+          ...item,
+          quantity: parseFloat(item.defaultIncrease || "1"),
+          price: item.purchasePrice,
+          notes: "",
+        },
+      ]);
     }
   };
 
   const updateItemQuantity = (itemId: string, quantity: number) => {
-    setScannedItems(scannedItems.map(i => 
-      i.itemId === itemId ? { ...i, quantity } : i
-    ));
+    setScannedItems(
+      scannedItems.map((i) => (i.itemId === itemId ? { ...i, quantity } : i)),
+    );
   };
 
   const removeItem = (itemId: string) => {
-    setScannedItems(scannedItems.filter(i => i.itemId !== itemId));
+    setScannedItems(scannedItems.filter((i) => i.itemId !== itemId));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (scannedItems.length === 0) {
-      toast.error('Please add items first');
+      toast.error("Please add items first");
       return;
     }
 
-    showLoading('Processing check-in...');
+    showLoading("Processing check-in...");
     try {
-      const items = scannedItems.map(item => ({
+      const items = scannedItems.map((item) => ({
         item_id: item.itemId,
         quantity: Number(item.quantity),
         quantityType: item.quantityType,
         price: Number(item.price),
-        notes: item.notes
+        notes: item.notes,
       }));
 
       const response = await productAPI.batchCheckIn({ items });
 
       let totalAmount = 0;
       response.data.items.forEach((item: any) => {
-        const taxAmount = (item.price * item.quantity * (item.taxPercent || 0)) / 100;
-        totalAmount += (item.price * item.quantity) + taxAmount;
+        const taxAmount =
+          (item.price * item.quantity * (item.taxPercent || 0)) / 100;
+        totalAmount += item.price * item.quantity + taxAmount;
       });
 
       setBillData({
@@ -123,20 +143,20 @@ const CheckIn: React.FC = () => {
         totalAmount,
         user: user?.full_name,
         location: selectedLocation?.locationName,
-        timestamp: new Date().toLocaleString()
+        timestamp: new Date().toLocaleString(),
       });
 
       setShowBill(true);
       toast.success(`${response.data.count} items checked in successfully`);
-      
+
       if (response.data.errors?.length > 0) {
         toast.warning(`${response.data.errors.length} items failed`);
       }
-      
+
       setScannedItems([]);
       fetchTodayStats();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Check-in failed');
+      toast.error(error.response?.data?.message || "Check-in failed");
     } finally {
       hideLoading();
     }
@@ -162,20 +182,26 @@ const CheckIn: React.FC = () => {
         </div>
         <div className="bg-green-50 px-4 py-2 rounded-lg border border-green-200">
           <p className="text-xs text-green-600">Today's Check-In</p>
-          <p className="text-xl font-bold text-green-700">{todayStats.checkInCount}</p>
+          <p className="text-xl font-bold text-green-700">
+            {todayStats.checkInCount}
+          </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Scan / Search Item</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            Scan / Search Item
+          </h2>
           <div className="space-y-3">
             <div className="flex gap-2">
               <input
                 type="text"
                 value={searchValue}
-                onChange={(e) => setSearchValue(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                onChange={(e) => {
+                  setSearchValue(e.target.value);
+                }}
+                onKeyPress={(e) => e.key === "Enter" && handleSearch()}
                 placeholder="Enter Item Code or Barcode"
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 autoFocus
@@ -199,7 +225,9 @@ const CheckIn: React.FC = () => {
 
         <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Items ({scannedItems.length})</h2>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Items ({scannedItems.length})
+            </h2>
             {scannedItems.length > 0 && (
               <button
                 onClick={() => setScannedItems([])}
@@ -222,9 +250,13 @@ const CheckIn: React.FC = () => {
                 <div key={item.itemId} className="border rounded-lg p-4">
                   <div className="flex justify-between items-start mb-2">
                     <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900">{item.itemName}</h3>
+                      <h3 className="font-semibold text-gray-900">
+                        {item.itemName}
+                      </h3>
                       <p className="text-sm text-gray-600">{item.itemCode}</p>
-                      <p className="text-xs text-gray-500">Stock: {item.currentQty} pack</p>
+                      <p className="text-xs text-gray-500">
+                        Stock: {item.currentQty} pack
+                      </p>
                     </div>
                     <button
                       onClick={() => removeItem(item.itemId)}
@@ -235,26 +267,34 @@ const CheckIn: React.FC = () => {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-xs text-gray-600">Quantity pack<br/>
-                      <div>
-                        {`${item.quantity}* ${item.packQty}= ${item.quantity*item.packQty}${item.quantityType || 'pack'}`}
-                      </div>
+                      <label className="text-xs text-gray-600">
+                        Quantity pack
+                        <br />
+                        <div>
+                          {`${item.quantity}* ${item.packQty}= ${item.quantity * item.packQty}${item.quantityType || "pack"}`}
+                        </div>
                       </label>
 
                       <input
                         type="number"
                         value={item.quantity}
-                        onChange={(e) => updateItemQuantity(item.itemId, Number(e.target.value))}
+                        onChange={(e) =>
+                          updateItemQuantity(
+                            item.itemId,
+                            Number(e.target.value),
+                          )
+                        }
                         min="0.01"
                         step="0.01"
                         className="w-full px-2 py-1 border rounded text-sm"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-600">Current Stock <br/>
-                         <div>
-                        {`${item.currentQty}* ${item.packQty}= ${item.currentQty*item.packQty}${item.quantityType || 'pack'}`}
-                      </div>
+                      <label className="text-xs text-gray-600">
+                        Current Stock <br />
+                        <div>
+                          {`${item.currentQty}* ${item.packQty}= ${item.currentQty * item.packQty}${item.quantityType || "pack"}`}
+                        </div>
                       </label>
 
                       <div className="px-2 py-1 bg-gray-100 rounded text-sm font-medium">
@@ -282,8 +322,13 @@ const CheckIn: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-8 w-full max-w-md print:shadow-none">
             <div className="flex justify-between items-center mb-6 print:mb-4">
-              <h2 className="text-2xl font-bold text-gray-900">Check-In Bill</h2>
-              <button onClick={closeBill} className="text-gray-500 hover:text-gray-700 print:hidden">
+              <h2 className="text-2xl font-bold text-gray-900">
+                Check-In Bill
+              </h2>
+              <button
+                onClick={closeBill}
+                className="text-gray-500 hover:text-gray-700 print:hidden"
+              >
                 <X size={24} />
               </button>
             </div>
@@ -298,7 +343,9 @@ const CheckIn: React.FC = () => {
               <div className="space-y-2">
                 {billData.items?.map((item: any, idx: number) => (
                   <div key={idx} className="flex justify-between text-sm">
-                    <span>{item.itemName} x{item.quantity}</span>
+                    <span>
+                      {item.itemName} x{item.quantity}
+                    </span>
                     <span>€{(item.price * item.quantity).toFixed(2)}</span>
                   </div>
                 ))}
@@ -354,4 +401,3 @@ const CheckIn: React.FC = () => {
 };
 
 export default CheckIn;
-

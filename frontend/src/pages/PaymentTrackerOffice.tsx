@@ -12,7 +12,7 @@ import {
   Mail,
   RefreshCw,
 } from "lucide-react";
-import { categoriesAPI, invoiceAPI, supplierAPI } from "../services/api";
+import { categoriesAPI, invoiceAPI, supplierAPI, taxAPI } from "../services/api";
 import { useLoading } from "../context/LoadingContext";
 import { toast } from "react-toastify";
 
@@ -37,6 +37,7 @@ const PaymentTrackerOffice: React.FC = () => {
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string>("");
   const [paymentMode, setPaymentMode] = useState("");
   const [invoiceName, setInvoiceName] = useState<any[]>([]);
+  const [taxes, setTaxes] = useState<any[]>([]);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailStartDate, setEmailStartDate] = useState("");
   const [emailEndDate, setEmailEndDate] = useState("");
@@ -49,12 +50,14 @@ const PaymentTrackerOffice: React.FC = () => {
     frequency: "monthly",
     due_date: "",
     notes: "",
+    tax_id: "",
   });
   const [formData, setFormData] = useState({
     invoice_number: "",
     invoice_name: "",
     supplier_id: "",
     amount: "",
+    tax_id: "",
     invoice_date: "",
     due_date: "",
     notes: "",
@@ -66,6 +69,7 @@ const PaymentTrackerOffice: React.FC = () => {
     fetchSuppliers();
     fetchUpcomingAlerts();
     fetchName();
+    fetchTaxes();
   }, [filter, dateFilter, customStartDate, customEndDate]);
 
   useEffect(() => {
@@ -181,6 +185,15 @@ const PaymentTrackerOffice: React.FC = () => {
     }
   };
 
+  const fetchTaxes = async () => {
+    try {
+      const response = await taxAPI.getTaxes();
+      setTaxes(response.data);
+    } catch (error) {
+      console.error("Error fetching taxes:", error);
+    }
+  };
+
   const fetchAutoInvoices = async () => {
     showLoading("Loading auto invoices...");
     try {
@@ -226,6 +239,7 @@ const PaymentTrackerOffice: React.FC = () => {
         frequency: invoice.frequency || "monthly",
         due_date: invoice.dueDate || 0,
         notes: invoice.notes || "",
+        tax_id: invoice.taxId || "",
       });
     } else {
       setEditingAutoInvoice(null);
@@ -235,6 +249,7 @@ const PaymentTrackerOffice: React.FC = () => {
         frequency: "monthly",
         due_date: "",
         notes: "",
+        tax_id: "",
       });
     }
     setIsAutoModalOpen(true);
@@ -244,10 +259,19 @@ const PaymentTrackerOffice: React.FC = () => {
     e.preventDefault();
     showLoading(editingAutoInvoice ? "Updating..." : "Creating...");
     try {
+      const totalAmount = parseFloat(autoFormData.amount);
+      const selectedTax = taxes.find((t) => t.taxId === autoFormData.tax_id);
+      const taxPercent = selectedTax ? parseFloat(selectedTax.taxPercentage) : 0;
+      const baseAmount = taxPercent > 0 ? totalAmount / (1 + taxPercent / 100) : totalAmount;
+      const taxAmount = totalAmount - baseAmount;
+
       const data = {
         ...autoFormData,
-        amount: parseFloat(autoFormData.amount),
+        amount: parseFloat(baseAmount.toFixed(2)),
         due_date: parseInt(autoFormData.due_date),
+        tax_id: autoFormData.tax_id || null,
+        tax_percent: taxPercent || null,
+        tax_amount: taxPercent > 0 ? parseFloat(taxAmount.toFixed(2)) : null,
       };
       if (editingAutoInvoice) {
         await invoiceAPI.updateAutoInvoiceDetail(editingAutoInvoice.invoiceId, {
@@ -285,9 +309,19 @@ const PaymentTrackerOffice: React.FC = () => {
     e.preventDefault();
     showLoading(editingInvoice ? "Updating invoice..." : "Creating invoice...");
     try {
+      const totalAmount = parseFloat(formData.amount);
+      const selectedTax = taxes.find((t) => t.taxId === formData.tax_id);
+      const taxPercent = selectedTax ? parseFloat(selectedTax.taxPercentage) : 0;
+      // amount entered is tax-inclusive: base = total / (1 + tax%/100)
+      const baseAmount = taxPercent > 0 ? totalAmount / (1 + taxPercent / 100) : totalAmount;
+      const taxAmount = totalAmount - baseAmount;
+
       const data = {
         ...formData,
-        amount: parseFloat(formData.amount),
+        amount: parseFloat(baseAmount.toFixed(2)),
+        tax_id: formData.tax_id || null,
+        tax_percent: taxPercent || null,
+        tax_amount: taxPercent > 0 ? parseFloat(taxAmount.toFixed(2)) : null,
         type: "general",
       };
 
@@ -358,6 +392,7 @@ const PaymentTrackerOffice: React.FC = () => {
         invoice_name: invoice.invoiceName,
         supplier_id: invoice.supplierId || "",
         amount: invoice.amount.toString(),
+        tax_id: invoice.taxId || "",
         invoice_date: new Date(invoice.invoiceDate).toISOString().split("T")[0],
         due_date: new Date(invoice.dueDate).toISOString().split("T")[0],
         notes: invoice.notes || "",
@@ -369,6 +404,7 @@ const PaymentTrackerOffice: React.FC = () => {
         invoice_name: "",
         supplier_id: "",
         amount: "",
+        tax_id: "",
         invoice_date: "",
         due_date: "",
         notes: "",
@@ -587,6 +623,12 @@ const PaymentTrackerOffice: React.FC = () => {
                     Amount
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Tax
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Total
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Invoice Date
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -617,6 +659,13 @@ const PaymentTrackerOffice: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       €{parseFloat(invoice.amount).toFixed(2)}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-orange-600">
+                      {invoice.taxAmount ? `€${parseFloat(invoice.taxAmount).toFixed(2)}` : "-"}
+                      {invoice.taxPercent ? <span className="block text-xs text-gray-400">{parseFloat(invoice.taxPercent).toFixed(0)}%</span> : null}
+                    </td>
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                      €{(parseFloat(invoice.amount) + parseFloat(invoice.taxAmount || 0)).toFixed(2)}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">
                       {new Date(invoice.invoiceDate).toLocaleDateString()}
@@ -680,6 +729,12 @@ const PaymentTrackerOffice: React.FC = () => {
                     Amount
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Tax
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Total
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Frequency
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -700,7 +755,7 @@ const PaymentTrackerOffice: React.FC = () => {
                 {autoInvoices.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={9}
                       className="px-6 py-12 text-center text-gray-500"
                     >
                       <RefreshCw className="w-12 h-12 mx-auto mb-2 text-gray-300" />
@@ -718,6 +773,13 @@ const PaymentTrackerOffice: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
                         €{parseFloat(inv.amount).toFixed(2)}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-orange-600">
+                        {inv.taxAmount ? `€${parseFloat(inv.taxAmount).toFixed(2)}` : "-"}
+                        {inv.taxPercent ? <span className="block text-xs text-gray-400">{parseFloat(inv.taxPercent).toFixed(0)}%</span> : null}
+                      </td>
+                      <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                        €{(parseFloat(inv.amount) + parseFloat(inv.taxAmount || 0)).toFixed(2)}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600 capitalize">
                         {inv.frequency}
@@ -821,7 +883,7 @@ const PaymentTrackerOffice: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Amount *
+                    Amount (incl. tax) *
                   </label>
                   <input
                     type="number"
@@ -836,6 +898,30 @@ const PaymentTrackerOffice: React.FC = () => {
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tax
+                  </label>
+                  <select
+                    value={autoFormData.tax_id}
+                    onChange={(e) => setAutoFormData({ ...autoFormData, tax_id: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">No Tax</option>
+                    {taxes.map((tax) => (
+                      <option key={tax.taxId} value={tax.taxId}>
+                        {tax.tax_name} ({tax.taxPercentage}%)
+                      </option>
+                    ))}
+                  </select>
+                  {autoFormData.tax_id && autoFormData.amount && (() => {
+                    const total = parseFloat(autoFormData.amount);
+                    const taxPct = parseFloat(taxes.find(t => t.taxId === autoFormData.tax_id)?.taxPercentage || 0);
+                    const base = total / (1 + taxPct / 100);
+                    const tax = total - base;
+                    return <p className="text-xs text-gray-500 mt-1">Base: €{base.toFixed(2)} + Tax: €{tax.toFixed(2)}</p>;
+                  })()}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -860,7 +946,7 @@ const PaymentTrackerOffice: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Due count *
+                    Due days *
                   </label>
                   <input
                     type="number"
@@ -972,7 +1058,7 @@ const PaymentTrackerOffice: React.FC = () => {
                 </div> */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Amount *
+                    Amount (incl. tax) *
                   </label>
                   <input
                     type="number"
@@ -984,6 +1070,34 @@ const PaymentTrackerOffice: React.FC = () => {
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tax
+                  </label>
+                  <select
+                    value={formData.tax_id}
+                    onChange={(e) => setFormData({ ...formData, tax_id: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">No Tax</option>
+                    {taxes.map((tax) => (
+                      <option key={tax.taxId} value={tax.taxId}>
+                        {tax.tax_name} ({tax.taxPercentage}%)
+                      </option>
+                    ))}
+                  </select>
+                  {formData.tax_id && formData.amount && (() => {
+                    const total = parseFloat(formData.amount);
+                    const taxPct = parseFloat(taxes.find(t => t.taxId === formData.tax_id)?.taxPercentage || 0);
+                    const base = total / (1 + taxPct / 100);
+                    const tax = total - base;
+                    return (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Base: €{base.toFixed(2)} + Tax: €{tax.toFixed(2)}
+                      </p>
+                    );
+                  })()}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">

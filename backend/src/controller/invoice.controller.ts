@@ -6,7 +6,7 @@ const PDFDocument = require('pdfkit');
 export class InvoiceController {
     static async createInvoice(req: any, res: Response, next: NextFunction) {
         try {
-            const { invoice_number, invoice_name, supplier_id, amount, invoice_date, due_date, notes, type } = req.body;
+            const { invoice_number, invoice_name, supplier_id, amount, invoice_date, due_date, notes, type, tax_id, tax_percent, tax_amount } = req.body;
             const locationId = req.headers.location_id;
             const userId = req.user.id;
 
@@ -26,7 +26,10 @@ export class InvoiceController {
                     notes: notes || null,
                     locationId: locationId,
                     createdBy: userId,
-                    invoiceType: type || 'purchase'
+                    invoiceType: type || 'purchase',
+                    taxId: tax_id || null,
+                    taxPercent: tax_percent || null,
+                    taxAmount: tax_amount || null
                 }
             });
 
@@ -70,7 +73,7 @@ export class InvoiceController {
     static async updateInvoice(req: any, res: Response, next: NextFunction) {
         try {
             const { invoiceId } = req.params;
-            const { invoice_number, invoice_name, supplier_id, amount, invoice_date, due_date, notes, status, type } = req.body;
+            const { invoice_number, invoice_name, supplier_id, amount, invoice_date, due_date, notes, status, type, tax_id, tax_percent, tax_amount } = req.body;
 
             const updateData: any = {
                 invoiceNumber: invoice_number,
@@ -80,7 +83,10 @@ export class InvoiceController {
                 invoiceDate: new Date(invoice_date),
                 dueDate: new Date(due_date),
                 notes: notes || null,
-                status: status
+                status: status,
+                taxId: tax_id || null,
+                taxPercent: tax_percent || null,
+                taxAmount: tax_amount || null
             };
 
             if (type) {
@@ -301,7 +307,7 @@ export class InvoiceController {
 static async autoInvoice(req: any, res: Response, next: NextFunction) {
         try {
             const locationId = req.headers.location_id;
-            const { supplier_id, amount, due_date, notes, invoiceType,invoice_name,frequency} = req.body;
+            const { supplier_id, amount, due_date, notes, invoiceType, invoice_name, frequency, tax_id, tax_percent, tax_amount } = req.body;
 
             if (!locationId) {
                 res.status(400).json({ message: "Location ID required" });
@@ -313,12 +319,15 @@ static async autoInvoice(req: any, res: Response, next: NextFunction) {
                     invoiceName: invoice_name,
                     supplierId: supplier_id || null,
                     amount: amount,
-                    dueDate:due_date ,
+                    dueDate: due_date,
                     notes: notes || null,
                     locationId: locationId,
                     invoiceType: invoiceType,
                     createdBy: req.user.id,
-                    frequency:frequency
+                    frequency: frequency,
+                    taxId: tax_id || null,
+                    taxPercent: tax_percent || null,
+                    taxAmount: tax_amount || null
                 }
             });
 
@@ -363,17 +372,20 @@ static async autoInvoice(req: any, res: Response, next: NextFunction) {
     static async updateAutoInvoiceDetail(req:any,res:Response,next:NextFunction){
         try {
             const { invoiceId } = req.params;
-            const { invoiceName, supplier_id, amount,due_date, notes, invoiceType,frequency } = req.body;
+            const { invoiceName, supplier_id, amount, due_date, notes, invoiceType, frequency, tax_id, tax_percent, tax_amount } = req.body;
             const updatedInvoice = await prisma.autoInvoice.update({
                 where: { invoiceId: invoiceId },
                 data: {
                     invoiceName: invoiceName,
                     supplierId: supplier_id || null,
                     amount: amount,
-                    dueDate:due_date,
+                    dueDate: due_date,
                     notes: notes || null,
                     invoiceType: invoiceType,
-                    frequency:frequency
+                    frequency: frequency,
+                    taxId: tax_id || null,
+                    taxPercent: tax_percent || null,
+                    taxAmount: tax_amount || null
                 }
             }); 
             res.send(updatedInvoice)

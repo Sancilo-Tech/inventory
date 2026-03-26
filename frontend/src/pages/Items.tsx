@@ -338,7 +338,10 @@ const Items: React.FC = () => {
     
     autoTable(doc, {
       head: [['Item Code', 'Item Name', 'Barcode']],
-      body: tableData.map(item => [item.itemCode, item.itemName, '']),
+      body: tableData.flatMap(item => [
+        [item.itemCode, item.itemName, ''],
+        [{ content: '', colSpan: 3 }]
+      ]),
       startY: 30,
       theme: 'grid',
       headStyles: { fillColor: [59, 130, 246], halign: 'center' },
@@ -350,23 +353,20 @@ const Items: React.FC = () => {
       styles: {
         minCellHeight: 20
       },
+      didParseCell: (data: any) => {
+        if (data.row.index % 2 !== 0) {
+          data.cell.styles.minCellHeight = 15;
+        }
+      },
       didDrawCell: (data: any) => {
-        if (data.column.index === 2 && data.cell.section === 'body') {
-          const rowData = tableData[data.row.index];
-          if (rowData.barcodeImg) {
+        if (data.column.index === 2 && data.cell.section === 'body' && data.row.index % 2 === 0) {
+          const rowData = tableData[Math.floor(data.row.index / 2)];
+          if (rowData?.barcodeImg) {
             const imgWidth = 65;
             const imgHeight = 18;
             const xPos = data.cell.x + (data.cell.width - imgWidth) / 2;
             const yPos = data.cell.y + (data.cell.height - imgHeight) / 2;
-            
-            doc.addImage(
-              rowData.barcodeImg,
-              'PNG',
-              xPos,
-              yPos,
-              imgWidth,
-              imgHeight
-            );
+            doc.addImage(rowData.barcodeImg, 'PNG', xPos, yPos, imgWidth, imgHeight);
           }
         }
       }
@@ -993,13 +993,13 @@ const Items: React.FC = () => {
                 <input
                   type="number"
                   min="1"
-                  max="21"
+                  max="16"
                   value={printCount}
                   onChange={(e) => setPrintCount(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Will be arranged in 3×7 grid (max 21)
+                  Will be arranged in 4×4 grid (max 16 per page)
                 </p>
               </div>
               <div className="flex gap-2 justify-end">

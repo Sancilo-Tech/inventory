@@ -221,6 +221,9 @@ model Invoice {
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
   invoiceType    invoiceType   @default(purchase) @map("invoice_type")
+  taxId          String?       @map("tax_id") @db.Uuid
+  taxPercent     Decimal?      @map("tax_percent") @db.Decimal(5, 2)
+  taxAmount      Decimal?      @map("tax_amount") @db.Decimal(10, 2)
   @@unique([invoiceNumber,invoiceType])
   @@map("invoices")
 }
@@ -239,6 +242,9 @@ model AutoInvoice {
   updatedAt      DateTime      @updatedAt @map("updated_at")
   invoiceType    invoiceType   @default(purchase) @map("invoice_type")
   isDisable       Boolean       @default(false) @map("is_disable")
+  taxId          String?       @map("tax_id") @db.Uuid
+  taxPercent     Decimal?      @map("tax_percent") @db.Decimal(5, 2)
+  taxAmount      Decimal?      @map("tax_amount") @db.Decimal(10, 2)
   @@map("auto_invoices")
 }
 

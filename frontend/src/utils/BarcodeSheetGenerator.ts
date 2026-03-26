@@ -21,21 +21,33 @@ export const generateBarcodeSheet = ({ item, count }: BarcodeSheetGeneratorProps
       <head>
         <title>Barcode Sheet - ${item.itemName}-(${item.itemCode})</title>
         <style>
-          body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
-          .barcode-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-          .barcode-item { text-align: center; border: 1px dashed #ccc; padding: 10px; }
-          .barcode-item canvas { margin: 5px 0; }
-          .item-info { font-size: 10px; margin-top: 5px; }
-          @media print { body { margin: 0; } }
+          * { box-sizing: border-box; }
+          body { margin: 10; padding: 100mm; font-family: Arial, sans-serif; }
+          .barcode-grid { display: grid; grid-template-columns: repeat(4, 1fr); column-gap: 800px; row-gap: 800px; }
+          .barcode-row { display: contents; }
+          .barcode-item { text-align: center; border: 1px dashed #ccc; padding: 80px 20px; page-break-inside: avoid; break-inside: avoid; }
+          .barcode-item canvas { margin: 10px 0; }
+          .item-info { font-size: 11px; margin-top: 10px; }
+          .row-group { display: grid; grid-template-columns: repeat(4, 1fr); column-gap: 16px; page-break-inside: avoid; break-inside: avoid; }
+          .row-spacer { height: 200px; }
+          @media print {
+            body { margin: 0; padding: 10mm; }
+            .row-group { page-break-inside: avoid; break-inside: avoid; }
+            .row-spacer { height: 200px; }
+            .row-group:nth-child(8n) { page-break-after: always; }
+          }
         </style>
         <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
       </head>
       <body>
-        <h3>Barcode Sheet - ${item.itemName}</h3>
-        <div class="barcode-grid">
+        <div id="sheet">
   `;
 
   for (let i = 0; i < count; i++) {
+    if (i % 4 === 0) {
+      if (i !== 0) html += `</div><div class="row-spacer"></div>`;
+      html += `<div class="row-group">`;
+    }
     html += `
       <div class="barcode-item">
         <canvas id="barcode${i}"></canvas>
@@ -47,15 +59,16 @@ export const generateBarcodeSheet = ({ item, count }: BarcodeSheetGeneratorProps
   }
 
   html += `
-        </div>
+        </div></div>
         <script>
           window.onload = function() {
             for (let i = 0; i < ${count}; i++) {
               JsBarcode("#barcode" + i, "${item.barcode}", {
                 width: 1,
-                height: 40,
+                height: 80,
+                padding: 100,
                 fontSize: 10,
-                textMargin: 1
+                textMargin: 10
               });
             }
             setTimeout(() => window.print(), 500);

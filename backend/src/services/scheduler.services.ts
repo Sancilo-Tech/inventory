@@ -84,7 +84,10 @@ const createInvoice = async (data: any) => {
         createdBy: data.createdBy,
         locationId: data.locationId,
         supplierId: data.supplierId || null,
-        invoiceType: data.invoiceType || null
+        invoiceType: data.invoiceType || null,
+        taxId:data.taxId||null,
+        taxAmount:data.taxAmount||null,
+        taxPercent:data.taxPercent||null
       }
     })
     console.log(invoice)

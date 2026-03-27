@@ -68,6 +68,8 @@ const Items: React.FC = () => {
   const [viewingItem, setViewingItem] = useState<Item | null>(null);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [qtyType,setQtyType]=useState<any[]>([])
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredItems, setFilteredItems] = useState<Item[]>([]);
   const [formData, setFormData] = useState({
     item_code: "",
     item_name: "",
@@ -98,6 +100,24 @@ const Items: React.FC = () => {
     fetchTaxes();
     fetchLocations();
   }, []);
+
+  useEffect(() => {
+    setFilteredItems(items);
+  }, [items]);
+
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const q = e.target.value;
+    setSearchQuery(q);
+    const query = q.trim().toLowerCase();
+    if (!query) {
+      setFilteredItems(items);
+      return;
+    }
+    setFilteredItems(items.filter(item =>
+      item.itemName.toLowerCase().includes(query) ||
+      item.itemCode.toLowerCase().includes(query)
+    ));
+  };
 
 
 
@@ -398,8 +418,18 @@ const Items: React.FC = () => {
         </div>
       </div>
 
+      <div className="my-4">
+        <input
+          type="text"
+          placeholder="Search by item name or code..."
+          value={searchQuery}
+          onChange={handleSearch}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+      </div>
+
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-        {items.length === 0 ? (
+        {filteredItems.length === 0 ? (
           <div className="p-8 text-center">
             <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-900 mb-2">
@@ -448,7 +478,7 @@ const Items: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {items.map((item) => (
+                {filteredItems.map((item) => (
                   <tr key={item.itemId} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">
                       {item.itemCode}

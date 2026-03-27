@@ -572,6 +572,8 @@ const PaymentTracker: React.FC = () => {
                   <option value="Cheque">Cheque</option>
                   <option value="Credit Card">Credit Card</option>
                   <option value="Debit Card">Debit Card</option>
+                  <option value="SEPA">SEPA</option>
+                  <option value="SI">SI</option>
                 </select>
               </div>
               <div className="flex gap-2 justify-end">

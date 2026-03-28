@@ -8,16 +8,16 @@ interface Category {
   typeId: string;
   typeName: string;
   description?: string;
-  type: 'item' | 'financial' | 'group'|'quantityType';
+  type: 'item' | 'financial' | 'group' | 'quantityType' | 'paymentType';
 }
 
 const Categories: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
-  const [activeTab, setActiveTab] = useState<'item' | 'financial' | 'group'|'quantityType'>('item');
+  const [activeTab, setActiveTab] = useState<'item' | 'financial' | 'group' | 'quantityType' | 'paymentType'>('item');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewingCategory, setViewingCategory] = useState<Category | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [formData, setFormData] = useState({ typeName: '', description: '', type: 'item' as 'item' | 'financial' | 'group' |'quantityType'});
+  const [formData, setFormData] = useState({ typeName: '', description: '', type: 'item' as 'item' | 'financial' | 'group' | 'quantityType' | 'paymentType' });
   const { showLoading, hideLoading } = useLoading();
 
   useEffect(() => {
@@ -128,7 +128,7 @@ const Categories: React.FC = () => {
         >
           Group Categories
         </button>
-         <button
+        <button
           onClick={() => setActiveTab('quantityType')}
           className={`px-4 py-2 rounded-lg font-medium transition-colors ${
             activeTab === 'quantityType'
@@ -137,6 +137,16 @@ const Categories: React.FC = () => {
           }`}
         >
           QuantityType Categories
+        </button>
+        <button
+          onClick={() => setActiveTab('paymentType')}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            activeTab === 'paymentType'
+              ? 'bg-indigo-500 text-white'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
+        >
+          Payment Type
         </button>
       </div>
       

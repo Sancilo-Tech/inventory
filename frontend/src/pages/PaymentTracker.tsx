@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, X, CheckCircle, AlertTriangle, Clock, Filter, Download, Mail } from 'lucide-react';
 import {
+  categoriesAPI,
   invoiceAPI, supplierAPI, taxAPI
 } from '../services/api';
 import { useLoading } from '../context/LoadingContext';
@@ -27,6 +28,7 @@ const PaymentTracker: React.FC = () => {
   const [emailStartDate, setEmailStartDate] = useState('');
   const [emailEndDate, setEmailEndDate] = useState('');
   const [emailList, setEmailList] = useState('');
+  const [payment, setPayment] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     invoice_number: '',
     invoice_name: '',
@@ -44,6 +46,7 @@ const PaymentTracker: React.FC = () => {
     fetchSuppliers();
     fetchUpcomingAlerts();
     fetchTaxes();
+    fetchPayment();
   }, [filter, dateFilter, customStartDate, customEndDate]);
 
   const fetchTaxes = async () => {
@@ -143,7 +146,14 @@ const PaymentTracker: React.FC = () => {
       console.error('Error fetching suppliers:', error);
     }
   };
-
+  const fetchPayment=async()=>{
+    try{
+   const data=await categoriesAPI.getTypeCategories("paymentType")
+   setPayment(data.data)
+    }catch(err){
+      console.error('Error fetching payment types:', err);
+    }
+  }
   const fetchUpcomingAlerts = async () => {
     try {
       const response = await invoiceAPI.getUpcomingAlerts({type:'purchase'});
@@ -282,7 +292,9 @@ const PaymentTracker: React.FC = () => {
       'Invoice Number': invoice.invoiceNumber,
       'Invoice Name': invoice.invoiceName,
       'Supplier': suppliers.find(s => s.supplierId === invoice.supplierId)?.supplierName || '-',
-      'Amount': invoice.amount,
+      'Amount': parseFloat(invoice.amount).toFixed(2),
+      'Tax': invoice.taxAmount ? parseFloat(invoice.taxAmount).toFixed(2) : '0.00',
+      'Total Amount': (parseFloat(invoice.amount) + parseFloat(invoice.taxAmount || 0)).toFixed(2),
       'Invoice Date': new Date(invoice.invoiceDate).toLocaleDateString(),
       'Due Date': new Date(invoice.dueDate).toLocaleDateString(),
       'Days Until Due': getDaysUntilDue(invoice.dueDate)>0?getDaysUntilDue(invoice.dueDate):"Due Over",
@@ -316,7 +328,7 @@ const PaymentTracker: React.FC = () => {
     } else if (daysUntilDue < 0) {
       return <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">Overdue</span>;
     } else if (daysUntilDue <= 3) {
-      return <span className="px-2 py-1 text-xs rounded-full bg-orange-100 text-orange-700">Due Soon</span>;
+      return <span className="px-2 py-1 text-xs rounded-full bg-orange-100 text-orange-700">Due</span>;
     } else {
       return <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">Pending</span>;
     }
@@ -410,6 +422,51 @@ const PaymentTracker: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Totals Summary */}
+      {invoices.length > 0 && (() => {
+        const totalAmount = invoices.reduce((s, inv) => s + parseFloat(inv.amount || 0), 0);
+        const totalTax = invoices.reduce((s, inv) => s + parseFloat(inv.taxAmount || 0), 0);
+        const totalInclusive = totalAmount + totalTax;
+        const taxGroups: Record<string, { amount: number; tax: number; total: number }> = {};
+        invoices.forEach(inv => {
+          if (inv.taxPercent) {
+            const pct = parseFloat(inv.taxPercent).toFixed(0) + '%';
+            if (!taxGroups[pct]) taxGroups[pct] = { amount: 0, tax: 0, total: 0 };
+            taxGroups[pct].amount += parseFloat(inv.amount || 0);
+            taxGroups[pct].tax += parseFloat(inv.taxAmount || 0);
+            taxGroups[pct].total += parseFloat(inv.amount || 0) + parseFloat(inv.taxAmount || 0);
+          }
+        });
+        return (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+            <div className="flex flex-wrap gap-6 items-center">
+              <div className="flex flex-col">
+                <span className="text-xs text-gray-500 uppercase">Total Amount</span>
+                <span className="text-base font-bold text-gray-900">€{totalAmount.toFixed(2)}</span>
+              </div>
+              <div className="w-px h-8 bg-gray-200" />
+              <div className="flex flex-col">
+                <span className="text-xs text-gray-500 uppercase">Total Tax</span>
+                <span className="text-base font-bold text-orange-600">€{totalTax.toFixed(2)}</span>
+              </div>
+              <div className="w-px h-8 bg-gray-200" />
+              <div className="flex flex-col">
+                <span className="text-xs text-gray-500 uppercase">Total (incl. Tax)</span>
+                <span className="text-base font-bold text-blue-700">€{totalInclusive.toFixed(2)}</span>
+              </div>
+              {Object.keys(taxGroups).length > 0 && <div className="w-px h-8 bg-gray-200" />}
+              {Object.entries(taxGroups).sort(([a], [b]) => parseFloat(a) - parseFloat(b)).map(([pct, vals]) => (
+                <div key={pct} className="flex flex-col bg-gray-50 rounded-lg px-3 py-1">
+                  <span className="text-xs text-gray-500 uppercase">Tax {pct} Group</span>
+                  <span className="text-sm font-bold text-gray-800">Total: €{vals.total.toFixed(2)}</span>
+                  <span className="text-xs text-gray-500">Base: €{vals.amount.toFixed(2)} · Tax: €{vals.tax.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Invoices Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
@@ -507,12 +564,12 @@ const PaymentTracker: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Amount (incl. tax) *</label>
-                  <input type="number" step="0.01" required value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  <input type="number" step="1" min="0" required value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tax</label>
-                  <select value={formData.tax_id} onChange={(e) => setFormData({ ...formData, tax_id: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                    <option value="">No Tax</option>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Tax *</label>
+                  <select required value={formData.tax_id} onChange={(e) => setFormData({ ...formData, tax_id: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="">Select Tax</option>
                     {taxes.map((tax) => (
                       <option key={tax.taxId} value={tax.taxId}>{tax.tax_name} ({tax.taxPercentage}%)</option>
                     ))}
@@ -566,14 +623,10 @@ const PaymentTracker: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Payment Mode *</label>
                 <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                   <option value="">Select Payment Mode</option>
-                  <option value="Cash">Cash</option>
-                  <option value="UPI">UPI</option>
-                  <option value="Bank Transfer">Bank Transfer</option>
-                  <option value="Cheque">Cheque</option>
-                  <option value="Credit Card">Credit Card</option>
-                  <option value="Debit Card">Debit Card</option>
-                  <option value="SEPA">SEPA</option>
-                  <option value="SI">SI</option>
+                  {payment.map((p) => (
+                    <option key={p.typeId} value={p.typeName}>{p.typeName}</option>
+                  ))}
+                  
                 </select>
               </div>
               <div className="flex gap-2 justify-end">

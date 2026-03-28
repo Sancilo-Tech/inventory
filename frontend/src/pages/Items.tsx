@@ -50,7 +50,7 @@ interface Item {
   groupName?: string;
   supplier?: { supplierName: string };
   type?: { categoryName: string };
-  tax?: { tax_name: string };
+  tax?: { tax_name: string,taxPercentage:number };
   location?: { locationName: string };
 }
 
@@ -70,6 +70,8 @@ const Items: React.FC = () => {
   const [qtyType,setQtyType]=useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredItems, setFilteredItems] = useState<Item[]>([]);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [itemCodeExists, setItemCodeExists] = useState(false);
   const [formData, setFormData] = useState({
     item_code: "",
     item_name: "",
@@ -115,7 +117,8 @@ const Items: React.FC = () => {
     }
     setFilteredItems(items.filter(item =>
       item.itemName.toLowerCase().includes(query) ||
-      item.itemCode.toLowerCase().includes(query)
+      item.itemCode.toLowerCase().includes(query) ||
+      (item.barcode && item.barcode.toLowerCase().includes(query))
     ));
   };
 
@@ -175,27 +178,71 @@ const Items: React.FC = () => {
     }
   };
 
+  const f = (field: string) =>
+    errors[field]
+      ? 'w-full px-3 py-2 border border-red-500 rounded-lg focus:ring-2 focus:ring-red-400 bg-red-50'
+      : 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent';
+
+  const allowedCharsRegex = /^[a-zA-Z0-9_\-/.\s]+$/;
+
+  const handleNameInput = (e: React.ChangeEvent<HTMLInputElement>, field: 'item_code' | 'item_name') => {
+    const val = e.target.value;
+    if (val && !allowedCharsRegex.test(val)) {
+      setErrors(prev => ({ ...prev, [field]: 'Only letters, numbers, _ - / . allowed' }));
+      return;
+    }
+    setErrors(prev => { const n = { ...prev }; delete n[field]; return n; });
+    setFormData({ ...formData, [field]: val });
+    if (field === 'item_name' && val.trim()) {
+      const match = items.find(i => i.itemName.toLowerCase() === val.trim().toLowerCase());
+      if (match) toast.info(`Item "${match.itemName}" already exists (Code: ${match.itemCode})`, { toastId: 'item-name-match' });
+    }
+  };
+
+  const handleItemCodeBlur = async () => {
+    if (!formData.item_code.trim() || editingItem) return;
+    const exists = items.find(i => i.itemCode.toLowerCase() === formData.item_code.trim().toLowerCase());
+    if (exists) {
+      setItemCodeExists(true);
+      setErrors(prev => ({ ...prev, item_code: `Item code "${formData.item_code}" already exists` }));
+      toast.warning(`Item code "${formData.item_code}" already exists`, { toastId: 'item-code-exists' });
+    } else {
+      setItemCodeExists(false);
+      setErrors(prev => { const n = { ...prev }; delete n.item_code; return n; });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const newErrors: Record<string, string> = {};
+    if (!formData.supplier_id) newErrors.supplier_id = 'Supplier is required';
+    if (!formData.type_id) newErrors.type_id = 'Category is required';
+    if (!formData.location_id) newErrors.location_id = 'Location is required';
+    if (!formData.tax_id) newErrors.tax_id = 'Tax is required';
+    if (!formData.defaultIncrease) newErrors.defaultIncrease = 'Default Check-In is required';
+    if (!formData.defaultDecrease) newErrors.defaultDecrease = 'Default Check-Out is required';
+    if (itemCodeExists) newErrors.item_code = `Item code "${formData.item_code}" already exists`;
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      toast.error(Object.values(newErrors)[0]);
+      return;
+    }
+    setErrors({});
     showLoading(editingItem ? "Updating item..." : "Creating item...");
     try {
       const data = {
         ...formData,
         purchase_price: parseFloat(formData.purchase_price),
-        tax_percent:
-          parseFloat(
-            taxes.find((s) => s.taxId == formData.tax_id)?.taxPercentage,
-          ) || 0,
+        tax_percent: parseFloat(taxes.find((s) => s.taxId == formData.tax_id)?.taxPercentage) || 0,
         current_qty: formData.current_qty ? parseFloat(formData.current_qty) : 0,
-        rol: parseInt(formData.rol),
-        moq: parseInt(formData.moq),
-        eoq: parseInt(formData.eoq),
+        rol: formData.rol ? parseInt(formData.rol) : undefined,
+        moq: formData.moq ? parseInt(formData.moq) : undefined,
+        eoq: formData.eoq ? parseInt(formData.eoq) : undefined,
         defaultIncrease: parseFloat(formData.defaultIncrease),
         defaultDecrease: parseFloat(formData.defaultDecrease),
         packQty: formData.packQty ? parseFloat(formData.packQty) : undefined,
         groupName: formData.groupName || undefined,
       };
-      console.log(data);
       if (editingItem) {
         await itemAPI.updateItem(editingItem.itemId, data);
         toast.success("Item updated successfully");
@@ -205,9 +252,14 @@ const Items: React.FC = () => {
       }
       fetchItems();
       closeModal();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving item:", error);
-      toast.error("Failed to save item");
+      const message = error?.response?.data?.message || 'Failed to save item';
+      if (message.toLowerCase().includes('item code already exists')) {
+        toast.error(`Item code "${formData.item_code}" already exists in this location`);
+      } else {
+        toast.error(message);
+      }
     } finally {
       hideLoading();
     }
@@ -230,6 +282,8 @@ const Items: React.FC = () => {
   };
 
   const openModal = (item?: Item) => {
+    setErrors({});
+    setItemCodeExists(false);
     if (item) {
       setEditingItem(item);
       setFormData({
@@ -281,6 +335,8 @@ const Items: React.FC = () => {
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingItem(null);
+    setErrors({});
+    setItemCodeExists(false);
     setFormData({
       item_code: "",
       item_name: "",
@@ -421,7 +477,7 @@ const Items: React.FC = () => {
       <div className="my-4">
         <input
           type="text"
-          placeholder="Search by item name or code..."
+          placeholder="Search by item name, code or barcode..."
           value={searchQuery}
           onChange={handleSearch}
           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -451,27 +507,13 @@ const Items: React.FC = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Barcode
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Current Qty
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Unit
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    ROL
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    MOQ
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    EOQ
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Price
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Supplier
-                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Current Qty</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Unit</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tax %</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tax Amt</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                     Actions
                   </th>
@@ -493,27 +535,13 @@ const Items: React.FC = () => {
                         height={25}
                       />
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {item.currentQty}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 capitalize">
-                      {item.quantityType || "unit"}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {item.rol || "-"}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {item.moq || "-"}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {item.eoq || "-"}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      €{item.totalAmount}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {item.supplier?.supplierName || "-"}
-                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{item.currentQty}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600 capitalize">{item.quantityType || 'unit'}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{item.tax?.taxPercentage ?? item.taxPercent ?? '-'}%</td>
+                    <td className="px-6 py-4 text-sm text-gray-600">€{Number(item.purchasePrice).toFixed(2)}</td>
+                    <td className="px-6 py-4 text-sm text-orange-600">€{(Number(item.totalAmount) - Number(item.purchasePrice)).toFixed(2)}</td>
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">€{Number(item.totalAmount).toFixed(2)}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{item.supplier?.supplierName || '-'}</td>
                     <td className="px-6 py-4 text-sm text-right">
                       <div className="flex justify-end gap-2">
                         <button
@@ -676,11 +704,11 @@ const Items: React.FC = () => {
                     type="text"
                     required
                     value={formData.item_code}
-                    onChange={(e) =>
-                      setFormData({ ...formData, item_code: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onChange={(e) => handleNameInput(e, 'item_code')}
+                    onBlur={handleItemCodeBlur}
+                    className={f('item_code')}
                   />
+                  {errors.item_code && <p className="text-xs text-red-500 mt-1">{errors.item_code}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -690,11 +718,10 @@ const Items: React.FC = () => {
                     type="text"
                     required
                     value={formData.item_name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, item_name: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onChange={(e) => handleNameInput(e, 'item_name')}
+                    className={f('item_name')}
                   />
+                  {errors.item_name && <p className="text-xs text-red-500 mt-1">{errors.item_name}</p>}
                 </div>
              
 
@@ -795,82 +822,68 @@ const Items: React.FC = () => {
                     Supplier
                   </label>
                   <select
+                    required
                     value={formData.supplier_id}
-                    onChange={(e) =>
-                      setFormData({ ...formData, supplier_id: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onChange={(e) => setFormData({ ...formData, supplier_id: e.target.value })}
+                    className={f('supplier_id')}
                   >
                     <option value="">Select Supplier</option>
                     {suppliers.map((supplier) => (
-                      <option
-                        key={supplier.supplierId}
-                        value={supplier.supplierId}
-                      >
-                        {supplier.supplierName}
-                      </option>
+                      <option key={supplier.supplierId} value={supplier.supplierId}>{supplier.supplierName}</option>
                     ))}
                   </select>
+                  {errors.supplier_id && <p className="text-xs text-red-500 mt-1">{errors.supplier_id}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Category
                   </label>
                   <select
+                    required
                     value={formData.type_id}
-                    onChange={(e) =>
-                      setFormData({ ...formData, type_id: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onChange={(e) => setFormData({ ...formData, type_id: e.target.value })}
+                    className={f('type_id')}
                   >
                     <option value="">Select Category</option>
                     {categories.map((category) => (
-                      <option key={category.typeId} value={category.typeId}>
-                        {category.typeName}
-                      </option>
+                      <option key={category.typeId} value={category.typeId}>{category.typeName}</option>
                     ))}
                   </select>
+                  {errors.type_id && <p className="text-xs text-red-500 mt-1">{errors.type_id}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Location
                   </label>
                   <select
+                    required
                     value={formData.location_id}
-                    onChange={(e) =>
-                      setFormData({ ...formData, location_id: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onChange={(e) => setFormData({ ...formData, location_id: e.target.value })}
+                    className={f('location_id')}
                   >
                     <option value="">Select Location</option>
                     {locations.map((location) => (
-                      <option
-                        key={location.locationId}
-                        value={location.locationId}
-                      >
-                        {location.locationName} ({location.locationCode})
-                      </option>
+                      <option key={location.locationId} value={location.locationId}>{location.locationName} ({location.locationCode})</option>
                     ))}
                   </select>
+                  {errors.location_id && <p className="text-xs text-red-500 mt-1">{errors.location_id}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Tax
                   </label>
                   <select
+                    required
                     value={formData.tax_id}
-                    onChange={(e) =>
-                      setFormData({ ...formData, tax_id: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onChange={(e) => setFormData({ ...formData, tax_id: e.target.value })}
+                    className={f('tax_id')}
                   >
                     <option value="">Select Tax</option>
                     {taxes.map((tax) => (
-                      <option key={tax.taxId} value={tax.taxId}>
-                        {tax.tax_name} ({tax.taxPercentage}%)
-                      </option>
+                      <option key={tax.taxId} value={tax.taxId}>{tax.tax_name} ({tax.taxPercentage}%)</option>
                     ))}
                   </select>
+                  {errors.tax_id && <p className="text-xs text-red-500 mt-1">{errors.tax_id}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -941,15 +954,12 @@ const Items: React.FC = () => {
                   <input
                     type="number"
                     min="0"
+                    required
                     value={formData.defaultIncrease}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        defaultIncrease: e.target.value,
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onChange={(e) => setFormData({ ...formData, defaultIncrease: e.target.value })}
+                    className={f('defaultIncrease')}
                   />
+                  {errors.defaultIncrease && <p className="text-xs text-red-500 mt-1">{errors.defaultIncrease}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -958,15 +968,12 @@ const Items: React.FC = () => {
                   <input
                     type="number"
                     min="0"
+                    required
                     value={formData.defaultDecrease}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        defaultDecrease: e.target.value,
-                      })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onChange={(e) => setFormData({ ...formData, defaultDecrease: e.target.value })}
+                    className={f('defaultDecrease')}
                   />
+                  {errors.defaultDecrease && <p className="text-xs text-red-500 mt-1">{errors.defaultDecrease}</p>}
                 </div>
               </div>
               <div className="flex gap-2 justify-end">

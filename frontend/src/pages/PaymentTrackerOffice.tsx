@@ -11,6 +11,7 @@ import {
   Filter,
   Mail,
   RefreshCw,
+  Download,
 } from "lucide-react";
 import { categoriesAPI, invoiceAPI, supplierAPI, taxAPI } from "../services/api";
 import { useLoading } from "../context/LoadingContext";
@@ -44,6 +45,7 @@ const PaymentTrackerOffice: React.FC = () => {
   const [emailList, setEmailList] = useState("");
   const [isAutoModalOpen, setIsAutoModalOpen] = useState(false);
   const [editingAutoInvoice, setEditingAutoInvoice] = useState<any>(null);
+  const [payment, setPayment] = useState<any[]>([]);
   const [autoFormData, setAutoFormData] = useState({
     invoice_name: "",
     amount: "",
@@ -70,6 +72,7 @@ const PaymentTrackerOffice: React.FC = () => {
     fetchUpcomingAlerts();
     fetchName();
     fetchTaxes();
+    fetchPayment();
   }, [filter, dateFilter, customStartDate, customEndDate]);
 
   useEffect(() => {
@@ -207,6 +210,14 @@ const PaymentTrackerOffice: React.FC = () => {
       hideLoading();
     }
   };
+  const fetchPayment=async()=>{
+    try {
+      const response = await categoriesAPI.getTypeCategories("paymentType")
+      setPayment(response.data)
+    }catch(err){
+      console.error("Error fetching payment types:", err)
+    }
+  }
 
   const handleToggleAutoInvoice = async (
     invoiceId: string,
@@ -444,7 +455,7 @@ const PaymentTrackerOffice: React.FC = () => {
     } else if (daysUntilDue <= 3) {
       return (
         <span className="px-2 py-1 text-xs rounded-full bg-orange-100 text-orange-700">
-          Due Soon
+          Due
         </span>
       );
     } else {
@@ -454,6 +465,39 @@ const PaymentTrackerOffice: React.FC = () => {
         </span>
       );
     }
+  };
+
+  const downloadCSV = () => {
+    if (invoices.length === 0) {
+      toast.error('No data to download');
+      return;
+    }
+    const data = invoices.map(invoice => ({
+      'Invoice Number': invoice.invoiceNumber,
+      'Invoice Name': invoice.invoiceName,
+      'Amount': parseFloat(invoice.amount).toFixed(2),
+      'Tax': invoice.taxAmount ? parseFloat(invoice.taxAmount).toFixed(2) : '0.00',
+      'Total Amount': (parseFloat(invoice.amount) + parseFloat(invoice.taxAmount || 0)).toFixed(2),
+      'Invoice Date': new Date(invoice.invoiceDate).toLocaleDateString(),
+      'Due Date': new Date(invoice.dueDate).toLocaleDateString(),
+      'Status': invoice.status === 'paid' ? 'Paid' : getDaysUntilDue(invoice.dueDate) < 0 ? 'Overdue' : getDaysUntilDue(invoice.dueDate) <= 3 ? 'Due Soon' : 'Pending',
+      'Payment Mode': invoice.paymentMode || '-',
+      'Paid Date': invoice.paidDate ? new Date(invoice.paidDate).toLocaleDateString() : '-',
+      'Notes': invoice.notes || '-'
+    }));
+    const headers = Object.keys(data[0]);
+    const csv = [
+      headers.join(','),
+      ...data.map(row => headers.map(h => `"${row[h as keyof typeof row]}"`).join(','))
+    ].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `office-payment-tracker-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    toast.success('CSV downloaded successfully');
   };
 
   const handleSendEmail = async () => {
@@ -495,8 +539,15 @@ const PaymentTrackerOffice: React.FC = () => {
           {activeTab === "invoices" && (
             <>
               <button
-                onClick={() => setShowEmailModal(true)}
+                onClick={downloadCSV}
                 className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+              >
+                <Download size={20} />
+                Download CSV
+              </button>
+              <button
+                onClick={() => setShowEmailModal(true)}
+                className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
               >
                 <Mail size={20} />
                 Send Email
@@ -608,7 +659,51 @@ const PaymentTrackerOffice: React.FC = () => {
 
       {/* Invoices Table */}
       {activeTab === "invoices" && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+        <>
+          {invoices.length > 0 && (() => {
+            const totalAmount = invoices.reduce((s, inv) => s + parseFloat(inv.amount || 0), 0);
+            const totalTax = invoices.reduce((s, inv) => s + parseFloat(inv.taxAmount || 0), 0);
+            const totalInclusive = totalAmount + totalTax;
+            const taxGroups: Record<string, { amount: number; tax: number; total: number }> = {};
+            invoices.forEach(inv => {
+              if (inv.taxPercent) {
+                const pct = parseFloat(inv.taxPercent).toFixed(0) + '%';
+                if (!taxGroups[pct]) taxGroups[pct] = { amount: 0, tax: 0, total: 0 };
+                taxGroups[pct].amount += parseFloat(inv.amount || 0);
+                taxGroups[pct].tax += parseFloat(inv.taxAmount || 0);
+                taxGroups[pct].total += parseFloat(inv.amount || 0) + parseFloat(inv.taxAmount || 0);
+              }
+            });
+            return (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+                <div className="flex flex-wrap gap-6 items-center">
+                  <div className="flex flex-col">
+                    <span className="text-xs text-gray-500 uppercase">Total Amount</span>
+                    <span className="text-base font-bold text-gray-900">€{totalAmount.toFixed(2)}</span>
+                  </div>
+                  <div className="w-px h-8 bg-gray-200" />
+                  <div className="flex flex-col">
+                    <span className="text-xs text-gray-500 uppercase">Total Tax</span>
+                    <span className="text-base font-bold text-orange-600">€{totalTax.toFixed(2)}</span>
+                  </div>
+                  <div className="w-px h-8 bg-gray-200" />
+                  <div className="flex flex-col">
+                    <span className="text-xs text-gray-500 uppercase">Total (incl. Tax)</span>
+                    <span className="text-base font-bold text-blue-700">€{totalInclusive.toFixed(2)}</span>
+                  </div>
+                  {Object.keys(taxGroups).length > 0 && <div className="w-px h-8 bg-gray-200" />}
+                  {Object.entries(taxGroups).sort(([a], [b]) => parseFloat(a) - parseFloat(b)).map(([pct, vals]) => (
+                    <div key={pct} className="flex flex-col bg-gray-50 rounded-lg px-3 py-1">
+                      <span className="text-xs text-gray-500 uppercase">Tax {pct} Group</span>
+                      <span className="text-sm font-bold text-gray-800">Total: €{vals.total.toFixed(2)}</span>
+                      <span className="text-xs text-gray-500">Base: €{vals.amount.toFixed(2)} · Tax: €{vals.tax.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
@@ -712,7 +807,8 @@ const PaymentTrackerOffice: React.FC = () => {
               </tbody>
             </table>
           </div>
-        </div>
+          </div>
+        </>
       )}
 
       {/* Auto Invoices Tab */}
@@ -887,7 +983,8 @@ const PaymentTrackerOffice: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    step="0.01"
+                    step="1"
+                    min="0"
                     required
                     value={autoFormData.amount}
                     onChange={(e) =>
@@ -901,14 +998,15 @@ const PaymentTrackerOffice: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tax
+                    Tax *
                   </label>
                   <select
+                    required
                     value={autoFormData.tax_id}
                     onChange={(e) => setAutoFormData({ ...autoFormData, tax_id: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="">No Tax</option>
+                    <option value="">Select Tax</option>
                     {taxes.map((tax) => (
                       <option key={tax.taxId} value={tax.taxId}>
                         {tax.tax_name} ({tax.taxPercentage}%)
@@ -950,6 +1048,8 @@ const PaymentTrackerOffice: React.FC = () => {
                   </label>
                   <input
                     type="number"
+                    min="1"
+                    step="1"
                     required
                     value={autoFormData.due_date}
                     onChange={(e) =>
@@ -1062,7 +1162,8 @@ const PaymentTrackerOffice: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    step="0.01"
+                    step="1"
+                    min="0"
                     required
                     value={formData.amount}
                     onChange={(e) =>
@@ -1073,14 +1174,15 @@ const PaymentTrackerOffice: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tax
+                    Tax *
                   </label>
                   <select
+                    required
                     value={formData.tax_id}
                     onChange={(e) => setFormData({ ...formData, tax_id: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
-                    <option value="">No Tax</option>
+                    <option value="">Select Tax</option>
                     {taxes.map((tax) => (
                       <option key={tax.taxId} value={tax.taxId}>
                         {tax.tax_name} ({tax.taxPercentage}%)
@@ -1185,14 +1287,9 @@ const PaymentTrackerOffice: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="">Select Payment Mode</option>
-                  <option value="Cash">Cash</option>
-                  <option value="UPI">UPI</option>
-                  <option value="Bank Transfer">Bank Transfer</option>
-                  <option value="Cheque">Cheque</option>
-                  <option value="Credit Card">Credit Card</option>
-                  <option value="Debit Card">Debit Card</option>
-                  <option value="SEPA">SEPA</option>
-                  <option value="SI">SI</option>
+                          {payment.map((p) => (
+                    <option key={p.typeId} value={p.typeName}>{p.typeName}</option>
+                  ))}
                 </select>
               </div>
               <div className="flex gap-2 justify-end">

@@ -27,7 +27,7 @@ export class categoriesController {
     }
     static async getCategories(req: Request, res: Response, next: NextFunction){
         try {
-            const type = req.query.type as 'item' | 'financial' | 'group'|'quantityType'
+            const type = req.query.type as 'item' | 'financial' | 'group'|'quantityType'|'paymentType'
             const categories = await prisma.typeMaster.findMany({
                 where: {
                     type:type

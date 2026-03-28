@@ -24,5 +24,6 @@ route.get("/seasonal-trends", asyncHandler(ReportController.getSeasonalTrends));
 route.get("/smart-insights", asyncHandler(ReportController.getSmartInsights));
 route.get("/transaction-analysis", asyncHandler(ReportController.getTransactionAnalysis));
 route.get("/grouped-products", asyncHandler(ReportController.getGroupedProducts));
+route.get("/price-change-report", asyncHandler(ReportController.getPriceChangeReport));
 
 export default route;

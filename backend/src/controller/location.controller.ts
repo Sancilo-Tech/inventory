@@ -1,7 +1,5 @@
 
 import { NextFunction, Request, Response } from "express";
-import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma";
 
 export class LocationController {
@@ -105,34 +103,19 @@ export class LocationController {
         try {
             const { locationId } = req.body;
             const userId = req.user.id;
-            
-            // Extract locationId if it's an object
-            const actualLocationId = typeof locationId === 'object' ? locationId.locationId : locationId;
-            
-            const user = await prisma.userLocation.findFirst({
-                where: {
-                    userId: userId
-                }
-            });
-            if (user) {
-                const UserLocation = await prisma.userLocation.update({
-                    where: {
-                        id: user.id
-                    },
-                    data: {
-                        locationId: actualLocationId
-                    }
-                })
-                res.status(200).json(UserLocation)
+
+            // Empty locationId means clear — delete all user location rows
+            if (!locationId) {
+                await prisma.userLocation.deleteMany({ where: { userId } });
+                res.status(200).json({ message: 'Location cleared' });
                 return;
             }
-            const userLocation = await prisma.userLocation.create({
-                data: {
-                    locationId: actualLocationId,
-                    userId: userId,
-                }
 
-            })
+            const userLocation = await prisma.userLocation.upsert({
+                where: { userId_locationId: { userId, locationId } },
+                update: {},
+                create: { userId, locationId },
+            });
             res.status(200).json(userLocation);
         } catch (err) {
             next(err)
@@ -140,28 +123,40 @@ export class LocationController {
     }
     static async getUserLocation(req: any, res: Response, next: NextFunction) {
         try {
-            const userId = req.user.id
-            // console.log("HI")
+            const userId = req.user.id;
+
+            // Primary: check UserLocation join table (set via assignLocation)
+            const userLocationRows = await prisma.userLocation.findMany({
+                where: { userId },
+                include: { location: true },
+            });
+
+            if (userLocationRows.length > 0) {
+                res.status(200).json(userLocationRows.map(r => r.location));
+                return;
+            }
+
+            // Fallback: check locationIds array on User record
             const user = await prisma.user.findUnique({
                 where: { userId },
                 select: { locationIds: true },
             });
 
             if (!user || user.locationIds.length === 0) {
-                 res.status(404).json({ message: "No locations found for user" });
-                 return;
+                // Last resort: return all locations so user is never stuck
+                const allLocations = await prisma.location.findMany({
+                    where: { isActive: true },
+                });
+                res.status(200).json(allLocations);
+                return;
             }
-            const userLocation = await prisma.location.findMany({
-                where: {
-                    locationId: {
-                        in: user?.locationIds
-                    }
-                },
 
-            })
-            res.status(200).json(userLocation)
+            const locations = await prisma.location.findMany({
+                where: { locationId: { in: user.locationIds } },
+            });
+            res.status(200).json(locations);
         } catch (err) {
-            next(err)
+            next(err);
         }
     }
     static async getUserLocationById(req: any, res: Response, next: NextFunction) {

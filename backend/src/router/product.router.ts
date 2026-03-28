@@ -17,6 +17,7 @@ route.delete("/delete/:itemId", asyncHandler(ItemController.deleteItem));
 route.get("/price-history/:itemId", asyncHandler(ItemController.getItemPriceHistory));
 route.get("/all-prices", asyncHandler(ItemController.getAllItemPrices));
 route.get("/price-stats/:itemId", asyncHandler(ItemController.getItemPriceStats));
+route.post("/bulk-upload", asyncHandler(ItemController.bulkUpload));
 
 // product config
 route.get("/config/:itemId", asyncHandler(ItemController.getItemById));

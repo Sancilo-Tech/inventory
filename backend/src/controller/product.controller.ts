@@ -4,7 +4,7 @@ import { prisma } from "../lib/prisma";
 export class ProductController {
     static async checkIn(req: any, res: Response, next: NextFunction) {
         try {
-            const { item_id, quantity, price, notes ,quantityType} = req.body;
+            const { item_id, quantity, price, notes, quantityType } = req.body;
             const locationId = req.headers.location_id;
             const userId = req.user.id;
 
@@ -15,26 +15,36 @@ export class ProductController {
 
             const result = await prisma.$transaction(async (tx) => {
                 const item = await tx.itemMaster.findFirst({
-                    where: { itemId: item_id, locationId: locationId },
+                    where: { itemId: item_id, locationId },
                     include: { supplier: true, type: true, tax: true, location: true }
                 });
 
-                if (!item) {
-                    throw new Error("Item not found");
-                }
+                if (!item) throw new Error("Item not found");
 
                 const newQty = Number(item.currentQty) + Number(quantity);
-                
-                await tx.itemMaster.update({
-                    where: { itemId: item_id },
-                    data: { currentQty: newQty }
-                });
+                const newPrice = Number(price);
+                const oldPrice = Number(item.purchasePrice);
+                const priceChanged = Math.abs(oldPrice - newPrice) > 0.001;
+
+                const updateData: any = { currentQty: newQty };
+
+                if (priceChanged && newPrice > 0) {
+                    const taxPercent = Number(item.taxPercent || 0);
+                    updateData.purchasePrice = newPrice;
+                    updateData.totalAmount = newPrice + (newPrice * taxPercent) / 100;
+
+                    await tx.itemPriceMaster.create({
+                        data: { itemId: item_id, price: newPrice }
+                    });
+                }
+
+                await tx.itemMaster.update({ where: { itemId: item_id }, data: updateData });
 
                 const transaction = await tx.transactionLog.create({
                     data: {
                         itemId: item_id,
                         transactionType: 'checkin',
-                        quantity: quantity,
+                        quantity,
                         quantityType,
                         remainingQty: newQty,
                         takenById: userId,
@@ -42,7 +52,7 @@ export class ProductController {
                     }
                 });
 
-                return { transaction, item: { ...item, currentQty: newQty }, price };
+                return { transaction, item: { ...item, currentQty: newQty }, price: newPrice, priceChanged };
             });
 
             res.status(201).json(result);
@@ -53,7 +63,7 @@ export class ProductController {
 
     static async checkOut(req: any, res: Response, next: NextFunction) {
         try {
-            const { item_id, quantity, price, notes,quantityType } = req.body;
+            const { item_id, quantity, price, notes, quantityType } = req.body;
             const locationId = req.headers.location_id;
             const userId = req.user.id;
 
@@ -64,30 +74,22 @@ export class ProductController {
 
             const result = await prisma.$transaction(async (tx) => {
                 const item = await tx.itemMaster.findFirst({
-                    where: { itemId: item_id, locationId: locationId },
+                    where: { itemId: item_id, locationId },
                     include: { supplier: true, type: true, tax: true, location: true }
                 });
 
-                if (!item) {
-                    throw new Error("Item not found");
-                }
+                if (!item) throw new Error("Item not found");
 
                 const newQty = Number(item.currentQty) - Number(quantity);
-                
-                if (newQty < 0) {
-                    throw new Error("Insufficient stock");
-                }
+                if (newQty < 0) throw new Error("Insufficient stock");
 
-                await tx.itemMaster.update({
-                    where: { itemId: item_id },
-                    data: { currentQty: newQty }
-                });
+                await tx.itemMaster.update({ where: { itemId: item_id }, data: { currentQty: newQty } });
 
                 const transaction = await tx.transactionLog.create({
                     data: {
                         itemId: item_id,
                         transactionType: 'checkout',
-                        quantity: quantity,
+                        quantity,
                         quantityType,
                         remainingQty: newQty,
                         takenById: userId,
@@ -106,7 +108,7 @@ export class ProductController {
 
     static async batchCheckIn(req: any, res: Response, next: NextFunction) {
         try {
-            const { items } = req.body; // Array of {item_id, quantity, price, notes}
+            const { items } = req.body;
             const locationId = req.headers.location_id;
             const userId = req.user.id;
 
@@ -120,18 +122,32 @@ export class ProductController {
 
                 for (const itemData of items) {
                     const item = await tx.itemMaster.findFirst({
-                        where: { itemId: itemData.item_id, locationId: locationId },
+                        where: { itemId: itemData.item_id, locationId },
                         include: { supplier: true, type: true, tax: true, location: true }
                     });
 
                     if (!item) continue;
 
                     const newQty = Number(item.currentQty) + Number(itemData.quantity);
-                    
-                    await tx.itemMaster.update({
-                        where: { itemId: itemData.item_id },
-                        data: { currentQty: newQty }
-                    });
+                    const newPrice = Number(itemData.price);
+                    const oldPrice = Number(item.purchasePrice);
+                    const priceChanged = Math.abs(oldPrice - newPrice) > 0.001;
+
+                    const updateData: any = { currentQty: newQty };
+
+                    // Only update price if changed and valid
+                    if (priceChanged && newPrice > 0 && itemData.applyNewPrice !== false) {
+                        const taxPercent = Number(item.taxPercent || 0);
+                        updateData.purchasePrice = newPrice;
+                        updateData.totalAmount = newPrice + (newPrice * taxPercent) / 100;
+
+                        // Record in ItemPriceMaster (existing price history table)
+                        await tx.itemPriceMaster.create({
+                            data: { itemId: itemData.item_id, price: newPrice }
+                        });
+                    }
+
+                    await tx.itemMaster.update({ where: { itemId: itemData.item_id }, data: updateData });
 
                     await tx.transactionLog.create({
                         data: {
@@ -145,7 +161,15 @@ export class ProductController {
                         }
                     });
 
-                    processedItems.push({ ...item, currentQty: newQty, quantity: itemData.quantity, price: itemData.price });
+                    processedItems.push({
+                        ...item,
+                        currentQty: newQty,
+                        quantity: itemData.quantity,
+                        price: newPrice,
+                        oldPrice,
+                        priceChanged,
+                        taxPercent: Number(item.taxPercent || 0),
+                    });
                 }
 
                 return processedItems;
@@ -159,7 +183,7 @@ export class ProductController {
 
     static async batchCheckOut(req: any, res: Response, next: NextFunction) {
         try {
-            const { items } = req.body; // Array of {item_id, quantity, price, notes}
+            const { items } = req.body;
             const locationId = req.headers.location_id;
             const userId = req.user.id;
 
@@ -174,26 +198,16 @@ export class ProductController {
 
                 for (const itemData of items) {
                     const item = await tx.itemMaster.findFirst({
-                        where: { itemId: itemData.item_id, locationId: locationId },
+                        where: { itemId: itemData.item_id, locationId },
                         include: { supplier: true, type: true, tax: true, location: true }
                     });
 
-                    if (!item) {
-                        errors.push({ item_id: itemData.item_id, error: "Item not found" });
-                        continue;
-                    }
+                    if (!item) { errors.push({ item_id: itemData.item_id, error: "Item not found" }); continue; }
 
                     const newQty = Number(item.currentQty) - Number(itemData.quantity);
-                    
-                    if (newQty < 0) {
-                        errors.push({ item_id: itemData.item_id, error: "Insufficient stock" });
-                        continue;
-                    }
+                    if (newQty < 0) { errors.push({ item_id: itemData.item_id, error: "Insufficient stock" }); continue; }
 
-                    await tx.itemMaster.update({
-                        where: { itemId: itemData.item_id },
-                        data: { currentQty: newQty }
-                    });
+                    await tx.itemMaster.update({ where: { itemId: itemData.item_id }, data: { currentQty: newQty } });
 
                     await tx.transactionLog.create({
                         data: {
@@ -207,7 +221,13 @@ export class ProductController {
                         }
                     });
 
-                    processedItems.push({ ...item, currentQty: newQty, quantity: itemData.quantity, price: itemData.price });
+                    processedItems.push({
+                        ...item,
+                        currentQty: newQty,
+                        quantity: itemData.quantity,
+                        price: itemData.price,
+                        taxPercent: Number(item.taxPercent || 0),
+                    });
                 }
 
                 return { processedItems, errors };
@@ -226,10 +246,7 @@ export class ProductController {
             today.setHours(0, 0, 0, 0);
 
             const transactions = await prisma.transactionLog.findMany({
-                where: {
-                    createdAt: { gte: today },
-                    item: { locationId: locationId }
-                },
+                where: { createdAt: { gte: today }, item: { locationId } },
                 include: { item: true }
             });
 

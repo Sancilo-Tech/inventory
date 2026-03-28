@@ -1,5 +1,26 @@
 import { Request, Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
+import QRCode from "qrcode";
+
+interface BulkItemInput {
+    item_code: string;
+    item_name: string;
+    location_id: string;
+    type_id?: string;
+    supplier_id?: string;
+    tax_id?: string;
+    purchase_price: number;
+    tax_percent?: number;
+    current_qty?: number;
+    quantityType?: string;
+    rol?: number;
+    moq?: number;
+    eoq?: number;
+    defaultIncrease?: number;
+    defaultDecrease?: number;
+    packQty?: number;
+    groupName?: string;
+}
 
 export class ItemController {
     static async addItem(req: Request, res: Response, next: NextFunction) {
@@ -349,7 +370,116 @@ export class ItemController {
         }
     }
 
+    static async bulkUpload(req: any, res: Response, next: NextFunction) {
+        try {
+            const locationId: string = req.headers.location_id as string;
+            if (!locationId) {
+                res.status(400).json({ message: "Location ID required" });
+                return;
+            }
 
+            const items: BulkItemInput[] = req.body.items;
+            if (!Array.isArray(items) || items.length === 0) {
+                res.status(400).json({ message: "No items provided" });
+                return;
+            }
+            if (items.length > 1000) {
+                res.status(400).json({ message: "Maximum 1000 items per upload" });
+                return;
+            }
 
+            // Fetch existing item codes for this location to detect duplicates
+            const existingItems = await prisma.itemMaster.findMany({
+                where: { locationId, isDisable: false },
+                select: { itemCode: true }
+            });
+            const existingCodes = new Set(existingItems.map(i => i.itemCode.toLowerCase()));
+
+            // Fetch tax percentages for all referenced tax IDs
+            const taxIds = [...new Set(items.map(i => i.tax_id).filter(Boolean))] as string[];
+            const taxes = taxIds.length > 0
+                ? await prisma.taxMaster.findMany({ where: { taxId: { in: taxIds } } })
+                : [];
+            const taxMap = new Map(taxes.map(t => [t.taxId, Number(t.taxPercentage)]));
+
+            const succeeded: string[] = [];
+            const failed: { row: number; error: string }[] = [];
+
+            const CHUNK = 100;
+            for (let i = 0; i < items.length; i += CHUNK) {
+                const chunk = items.slice(i, i + CHUNK);
+
+                await Promise.all(chunk.map(async (item, idx) => {
+                    const rowNum = i + idx + 2; // match Excel row numbering
+                    const effectiveLocationId = item.location_id || locationId;
+
+                    // Backend validation
+                    if (!item.item_code?.trim()) {
+                        failed.push({ row: rowNum, error: 'item_code is required' }); return;
+                    }
+                    if (!item.item_name?.trim()) {
+                        failed.push({ row: rowNum, error: 'item_name is required' }); return;
+                    }
+                    if (!item.purchase_price || Number(item.purchase_price) <= 0) {
+                        failed.push({ row: rowNum, error: 'purchase_price must be > 0' }); return;
+                    }
+                    if (existingCodes.has(item.item_code.toLowerCase())) {
+                        failed.push({ row: rowNum, error: `item_code "${item.item_code}" already exists` }); return;
+                    }
+
+                    try {
+                        // Auto-generate barcode
+                        const barcodeValue = `INV${Date.now().toString().slice(-6)}${String(rowNum).padStart(3, '0')}`;
+                        await QRCode.toDataURL(barcodeValue); // validate it generates fine
+
+                        const taxPercent = item.tax_id ? (taxMap.get(item.tax_id) ?? 0) : (item.tax_percent ?? 0);
+                        const purchasePrice = Number(item.purchase_price);
+                        const totalAmount = purchasePrice + (purchasePrice * taxPercent) / 100;
+
+                        const created = await prisma.itemMaster.create({
+                            data: {
+                                itemCode: item.item_code.trim(),
+                                itemName: item.item_name.trim(),
+                                locationId: effectiveLocationId,
+                                currentQty: item.current_qty ?? 0,
+                                barcode: barcodeValue,
+                                supplierId: item.supplier_id || null,
+                                typeId: item.type_id || null,
+                                taxId: item.tax_id || null,
+                                purchasePrice,
+                                taxPercent,
+                                totalAmount,
+                                rol: item.rol ?? 0,
+                                moq: item.moq ?? null,
+                                eoq: item.eoq ?? null,
+                                quantityType: item.quantityType ?? 'unit',
+                                defaultIncrease: item.defaultIncrease ?? 1,
+                                defaultDecrease: item.defaultDecrease ?? 1,
+                                packQty: item.packQty ?? null,
+                                groupName: item.groupName || null,
+                            }
+                        });
+
+                        await prisma.itemPriceMaster.create({
+                            data: { itemId: created.itemId, price: purchasePrice }
+                        });
+
+                        existingCodes.add(item.item_code.toLowerCase()); // prevent intra-batch duplicates
+                        succeeded.push(created.itemId);
+                    } catch (err: unknown) {
+                        const msg = err instanceof Error ? err.message : 'Insert failed';
+                        failed.push({ row: rowNum, error: msg });
+                    }
+                }));
+            }
+
+            res.status(200).json({
+                successCount: succeeded.length,
+                failed,
+            });
+        } catch (err) {
+            next(err);
+        }
+    }
 
 }

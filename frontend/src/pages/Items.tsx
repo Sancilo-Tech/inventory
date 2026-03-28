@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Package,
   Plus,
@@ -10,6 +10,7 @@ import {
   Download,
   Shuffle,
   FileDown,
+  Upload,
 } from "lucide-react";
 import {
   itemAPI,
@@ -22,6 +23,7 @@ import { useLoading } from "../context/LoadingContext";
 import { toast } from "react-toastify";
 import BarcodeComponent from "../components/BarcodeComponent";
 import { generateBarcodeSheet } from "../utils/BarcodeSheetGenerator";
+import BulkUploadModal from "../components/BulkUploadModal";
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import JsBarcode from 'jsbarcode';
@@ -54,25 +56,7 @@ interface Item {
   location?: { locationName: string };
 }
 
-const Items: React.FC = () => {
-  const [items, setItems] = useState<Item[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [group, setGroup] = useState<any[]>([]);
-  const [taxes, setTaxes] = useState<any[]>([]);
-  const [locations, setLocations] = useState<any[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
-  const [printItem, setPrintItem] = useState<Item | null>(null);
-  const [printCount, setPrintCount] = useState("1");
-  const [viewingItem, setViewingItem] = useState<Item | null>(null);
-  const [editingItem, setEditingItem] = useState<Item | null>(null);
-  const [qtyType,setQtyType]=useState<any[]>([])
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filteredItems, setFilteredItems] = useState<Item[]>([]);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [itemCodeExists, setItemCodeExists] = useState(false);
-  const [formData, setFormData] = useState({
+const defaultFormData = {
     item_code: "",
     item_name: "",
     barcode: "",
@@ -91,8 +75,41 @@ const Items: React.FC = () => {
     defaultDecrease: "1",
     packQty: "",
     groupName: "",
-  });
+  };
+
+const Items: React.FC = () => {
+  const [items, setItems] = useState<Item[]>([]);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [group, setGroup] = useState<any[]>([]);
+  const [taxes, setTaxes] = useState<any[]>([]);
+  const [locations, setLocations] = useState<any[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [printItem, setPrintItem] = useState<Item | null>(null);
+  const [printCount, setPrintCount] = useState("1");
+  const [viewingItem, setViewingItem] = useState<Item | null>(null);
+  const [editingItem, setEditingItem] = useState<Item | null>(null);
+  const [qtyType,setQtyType]=useState<any[]>([])
+  const [searchQuery, setSearchQuery] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [itemCodeExists, setItemCodeExists] = useState(false);
+  const [formData, setFormData] = useState(defaultFormData);
   const { showLoading, hideLoading } = useLoading();
+
+  const selectedLocation = localStorage.getItem('selectedLocation');
+  const locationId = selectedLocation ? JSON.parse(selectedLocation).locationId : '';
+
+  const filteredItems = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return items;
+    return items.filter(item =>
+      item.itemName.toLowerCase().includes(query) ||
+      item.itemCode.toLowerCase().includes(query) ||
+      (item.barcode && item.barcode.toLowerCase().includes(query))
+    );
+  }, [items, searchQuery]);
 
  
   useEffect(() => {
@@ -103,23 +120,8 @@ const Items: React.FC = () => {
     fetchLocations();
   }, []);
 
-  useEffect(() => {
-    setFilteredItems(items);
-  }, [items]);
-
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const q = e.target.value;
-    setSearchQuery(q);
-    const query = q.trim().toLowerCase();
-    if (!query) {
-      setFilteredItems(items);
-      return;
-    }
-    setFilteredItems(items.filter(item =>
-      item.itemName.toLowerCase().includes(query) ||
-      item.itemCode.toLowerCase().includes(query) ||
-      (item.barcode && item.barcode.toLowerCase().includes(query))
-    ));
+    setSearchQuery(e.target.value);
   };
 
 
@@ -128,7 +130,6 @@ const Items: React.FC = () => {
     showLoading("Loading items...");
     try {
       const response = await itemAPI.getItems();
-      // console.log(response.data)
       setItems(response.data);
     } catch (error) {
       console.error("Error fetching items:", error);
@@ -178,7 +179,7 @@ const Items: React.FC = () => {
     }
   };
 
-  const f = (field: string) =>
+  const inputClass = (field: string) =>
     errors[field]
       ? 'w-full px-3 py-2 border border-red-500 rounded-lg focus:ring-2 focus:ring-red-400 bg-red-50'
       : 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent';
@@ -221,6 +222,7 @@ const Items: React.FC = () => {
     if (!formData.tax_id) newErrors.tax_id = 'Tax is required';
     if (!formData.defaultIncrease) newErrors.defaultIncrease = 'Default Check-In is required';
     if (!formData.defaultDecrease) newErrors.defaultDecrease = 'Default Check-Out is required';
+    if (!formData.purchase_price || parseFloat(formData.purchase_price) <= 0) newErrors.purchase_price = 'Purchase price must be greater than 0';
     if (itemCodeExists) newErrors.item_code = `Item code "${formData.item_code}" already exists`;
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -308,26 +310,7 @@ const Items: React.FC = () => {
       });
     } else {
       setEditingItem(null);
-      setFormData({
-        item_code: "",
-        item_name: "",
-        barcode: "",
-        supplier_id: "",
-        type_id: "",
-        tax_id: "",
-        location_id: "",
-        purchase_price: "",
-        tax_percent: "",
-        current_qty: "",
-        rol: "",
-        moq: "",
-        eoq: "",
-        quantityType: "gram",
-        defaultIncrease: "1",
-        defaultDecrease: "1",
-        packQty: "",
-        groupName: "",
-      });
+      setFormData(defaultFormData);
     }
     setIsModalOpen(true);
   };
@@ -337,26 +320,7 @@ const Items: React.FC = () => {
     setEditingItem(null);
     setErrors({});
     setItemCodeExists(false);
-    setFormData({
-      item_code: "",
-      item_name: "",
-      barcode: "",
-      supplier_id: "",
-      type_id: "",
-      tax_id: "",
-      location_id: "",
-      purchase_price: "",
-      tax_percent: "",
-      current_qty: "",
-      rol: "",
-      moq: "",
-      eoq: "",
-      quantityType: "gram",
-      defaultIncrease: "1",
-      defaultDecrease: "1",
-      packQty: "",
-      groupName: "",
-    });
+    setFormData(defaultFormData);
   };
 
   const handlePrintBarcode = (item: Item) => {
@@ -463,6 +427,13 @@ const Items: React.FC = () => {
           >
             <FileDown size={20} />
             <span>Export PDF</span>
+          </button>
+          <button
+            onClick={() => setIsBulkModalOpen(true)}
+            className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+          >
+            <Upload size={20} />
+            <span>Bulk Upload</span>
           </button>
           <button
             onClick={() => openModal()}
@@ -706,7 +677,7 @@ const Items: React.FC = () => {
                     value={formData.item_code}
                     onChange={(e) => handleNameInput(e, 'item_code')}
                     onBlur={handleItemCodeBlur}
-                    className={f('item_code')}
+                    className={inputClass('item_code')}
                   />
                   {errors.item_code && <p className="text-xs text-red-500 mt-1">{errors.item_code}</p>}
                 </div>
@@ -719,7 +690,7 @@ const Items: React.FC = () => {
                     required
                     value={formData.item_name}
                     onChange={(e) => handleNameInput(e, 'item_name')}
-                    className={f('item_name')}
+                    className={inputClass('item_name')}
                   />
                   {errors.item_name && <p className="text-xs text-red-500 mt-1">{errors.item_name}</p>}
                 </div>
@@ -825,7 +796,7 @@ const Items: React.FC = () => {
                     required
                     value={formData.supplier_id}
                     onChange={(e) => setFormData({ ...formData, supplier_id: e.target.value })}
-                    className={f('supplier_id')}
+                    className={inputClass('supplier_id')}
                   >
                     <option value="">Select Supplier</option>
                     {suppliers.map((supplier) => (
@@ -842,7 +813,7 @@ const Items: React.FC = () => {
                     required
                     value={formData.type_id}
                     onChange={(e) => setFormData({ ...formData, type_id: e.target.value })}
-                    className={f('type_id')}
+                    className={inputClass('type_id')}
                   >
                     <option value="">Select Category</option>
                     {categories.map((category) => (
@@ -859,7 +830,7 @@ const Items: React.FC = () => {
                     required
                     value={formData.location_id}
                     onChange={(e) => setFormData({ ...formData, location_id: e.target.value })}
-                    className={f('location_id')}
+                    className={inputClass('location_id')}
                   >
                     <option value="">Select Location</option>
                     {locations.map((location) => (
@@ -876,7 +847,7 @@ const Items: React.FC = () => {
                     required
                     value={formData.tax_id}
                     onChange={(e) => setFormData({ ...formData, tax_id: e.target.value })}
-                    className={f('tax_id')}
+                    className={inputClass('tax_id')}
                   >
                     <option value="">Select Tax</option>
                     {taxes.map((tax) => (
@@ -901,8 +872,9 @@ const Items: React.FC = () => {
                         purchase_price: e.target.value,
                       })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className={inputClass('purchase_price')}
                   />
+                  {errors.purchase_price && <p className="text-xs text-red-500 mt-1">{errors.purchase_price}</p>}
                 </div>
 
                 <div>
@@ -957,7 +929,7 @@ const Items: React.FC = () => {
                     required
                     value={formData.defaultIncrease}
                     onChange={(e) => setFormData({ ...formData, defaultIncrease: e.target.value })}
-                    className={f('defaultIncrease')}
+                    className={inputClass('defaultIncrease')}
                   />
                   {errors.defaultIncrease && <p className="text-xs text-red-500 mt-1">{errors.defaultIncrease}</p>}
                 </div>
@@ -971,7 +943,7 @@ const Items: React.FC = () => {
                     required
                     value={formData.defaultDecrease}
                     onChange={(e) => setFormData({ ...formData, defaultDecrease: e.target.value })}
-                    className={f('defaultDecrease')}
+                    className={inputClass('defaultDecrease')}
                   />
                   {errors.defaultDecrease && <p className="text-xs text-red-500 mt-1">{errors.defaultDecrease}</p>}
                 </div>
@@ -994,6 +966,14 @@ const Items: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {isBulkModalOpen && (
+        <BulkUploadModal
+          locationId={locationId}
+          onClose={() => setIsBulkModalOpen(false)}
+          onSuccess={() => { setIsBulkModalOpen(false); fetchItems(); }}
+        />
       )}
 
       {isPrintModalOpen && (

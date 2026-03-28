@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 const API_BASE_URL = 'http://localhost:5000/api';
-// const API_BASE_URL = 'https://inventory-qj08.onrender.com/api';
+//const API_BASE_URL = 'https://inventory-qj08.onrender.com/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -98,6 +98,7 @@ export const itemAPI = {
   deleteItem: (itemId: string) => api.delete(`/item/delete/${itemId}`),
   getItemConfig: (itemId: string) => api.get(`/item/config/${itemId}`),
   updateItemConfig: (itemId: string, data: any) => api.put(`/item/config/update/${itemId}`, data),
+  bulkUpload: (data: any[]) => api.post('/item/bulk-upload', { items: data }),
 };
 
 export const categoriesAPI = {
@@ -129,6 +130,8 @@ export const reportAPI = {
   getItemPriceHistory: (itemId: string) => api.get(`/item/price-history/${itemId}`),
   getAllItemPrices: () => api.get('/item/all-prices'),
   getItemPriceStats: (itemId: string) => api.get(`/item/price-stats/${itemId}`),
+  getPriceChangeReport: (params?: { startDate?: string; endDate?: string; itemId?: string }) =>
+    api.get('/report/price-change-report', { params }),
 };
 
 export const invoiceAPI = {

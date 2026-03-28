@@ -57,7 +57,7 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setSelectedLocationState(location);
     try {
       if (location) {
-        await locationAPI.assignLocation({ locationId: location });
+        await locationAPI.assignLocation({ locationId: location.locationId });
         localStorage.setItem('selectedLocation', JSON.stringify(location));
         window.location.reload();
       } else {

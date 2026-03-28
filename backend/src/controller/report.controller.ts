@@ -1011,6 +1011,79 @@ export class ReportController {
         }
     }
 
+    static async getPriceChangeReport(req: any, res: Response, next: NextFunction) {
+        try {
+            const { startDate, endDate, itemId } = req.query;
+            const locationId = req.headers.location_id;
+            if (!locationId) {
+                res.status(400).json({ message: "Location ID required" });
+                return;
+            }
+
+            // Fetch ALL price history for items in this location (no date filter here).
+            // Date filtering is applied to the *pair* level (when the new price was recorded),
+            // so the old price entry — which may predate the range — is always available.
+            const itemFilter: any = { locationId, isDisable: false };
+            if (itemId) itemFilter.itemId = itemId as string;
+
+            const history = await prisma.itemPriceMaster.findMany({
+                where: { item: itemFilter },
+                include: { item: { include: { supplier: true, type: true } } },
+                orderBy: { createdAt: 'desc' },
+            });
+
+            // Group by item (entries already desc by createdAt)
+            const itemMap = new Map<string, typeof history>();
+            history.forEach(h => {
+                const arr = itemMap.get(h.itemId) ?? [];
+                arr.push(h);
+                itemMap.set(h.itemId, arr);
+            });
+
+            const rangeStart = startDate ? new Date(startDate as string) : null;
+            const rangeEnd   = endDate   ? new Date(endDate   as string) : null;
+
+            const rows: any[] = [];
+            itemMap.forEach((entries) => {
+                for (let i = 0; i < entries.length - 1; i++) {
+                    const newEntry = entries[i];       // more recent
+                    const oldEntry = entries[i + 1];   // previous
+
+                    // Apply date filter to the change event (newEntry.createdAt)
+                    const changedOn = new Date(newEntry.createdAt);
+                    if (rangeStart && changedOn < rangeStart) continue;
+                    if (rangeEnd   && changedOn > rangeEnd)   continue;
+
+                    const oldPrice = Number(oldEntry.price);
+                    const newPrice = Number(newEntry.price);
+                    const diff     = newPrice - oldPrice;
+                    const pctChange = oldPrice > 0
+                        ? parseFloat(((diff / oldPrice) * 100).toFixed(2))
+                        : null;   // null when old price was 0 — rendered as "N/A" on frontend
+
+                    rows.push({
+                        itemId:        newEntry.itemId,
+                        itemCode:      newEntry.item.itemCode,
+                        itemName:      newEntry.item.itemName,
+                        supplier:      newEntry.item.supplier?.supplierName ?? '-',
+                        category:      newEntry.item.type?.typeName ?? '-',
+                        oldPrice,
+                        newPrice,
+                        difference:    parseFloat(diff.toFixed(2)),
+                        percentChange: pctChange,
+                        changedOn:     newEntry.createdAt,
+                        direction:     diff > 0 ? 'increased' : diff < 0 ? 'decreased' : 'unchanged',
+                    });
+                }
+            });
+
+            rows.sort((a, b) => new Date(b.changedOn).getTime() - new Date(a.changedOn).getTime());
+            res.status(200).json(rows);
+        } catch (err) {
+            next(err);
+        }
+    }
+
     static async getTransactionAnalysis(req: any, res: Response, next: NextFunction) {
         try {
             const { startDate, endDate } = req.query;

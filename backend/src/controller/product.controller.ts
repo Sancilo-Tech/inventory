@@ -33,6 +33,11 @@ export class ProductController {
                     updateData.purchasePrice = newPrice;
                     updateData.totalAmount = newPrice + (newPrice * taxPercent) / 100;
 
+                    // Ensure old price is recorded as baseline before writing new price
+                    const existingHistory = await tx.itemPriceMaster.count({ where: { itemId: item_id } });
+                    if (existingHistory === 0 && oldPrice > 0) {
+                        await tx.itemPriceMaster.create({ data: { itemId: item_id, price: oldPrice } });
+                    }
                     await tx.itemPriceMaster.create({
                         data: { itemId: item_id, price: newPrice }
                     });
@@ -141,7 +146,11 @@ export class ProductController {
                         updateData.purchasePrice = newPrice;
                         updateData.totalAmount = newPrice + (newPrice * taxPercent) / 100;
 
-                        // Record in ItemPriceMaster (existing price history table)
+                        // Ensure old price is recorded as baseline before writing new price
+                        const existingHistory = await tx.itemPriceMaster.count({ where: { itemId: itemData.item_id } });
+                        if (existingHistory === 0 && oldPrice > 0) {
+                            await tx.itemPriceMaster.create({ data: { itemId: itemData.item_id, price: oldPrice } });
+                        }
                         await tx.itemPriceMaster.create({
                             data: { itemId: itemData.item_id, price: newPrice }
                         });

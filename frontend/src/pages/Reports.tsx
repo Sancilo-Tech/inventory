@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect } from 'react';
 import { Download, Printer, TrendingUp, TrendingDown, IndianRupee, Package, Calendar, FileText, AlertTriangle, Flame, Snowflake, DollarSign, ChevronDown, ChevronUp } from 'lucide-react';
-import { reportAPI, supplierAPI, categoriesAPI } from '../services/api';
+import { reportAPI, supplierAPI, categoriesAPI, invoiceAPI } from '../services/api';
 import { useLoading } from '../context/LoadingContext';
 import { toast } from 'react-toastify';
 
@@ -30,9 +30,10 @@ const Reports: React.FC = () => {
   const [itemPriceAnalysis, setItemPriceAnalysis] = useState<any[]>([]);
   const [selectedItemForChart, setSelectedItemForChart] = useState<any>(null);
   const [itemPriceHistory, setItemPriceHistory] = useState<any[]>([]);
-  const [priceChangeReport, setPriceChangeReport] = useState<any[]>([]);
-  const [priceChangeItemFilter, setPriceChangeItemFilter] = useState('');
-  const [priceChangeDateFilter, setPriceChangeDateFilter] = useState('last30days');
+  const [checkinInvoices, setCheckinInvoices] = useState<any[]>([]);
+  const [checkinInvoiceSupplier, setCheckinInvoiceSupplier] = useState('');
+  const [checkinInvoiceDateFilter, setCheckinInvoiceDateFilter] = useState('last30days');
+  const [expandedCheckinInvoice, setExpandedCheckinInvoice] = useState<string | null>(null);
   const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 0 });
   const { showLoading, hideLoading } = useLoading();
 
@@ -58,10 +59,10 @@ const Reports: React.FC = () => {
       fetchSeasonalAnalysis();
     } else if (activeTab === 'priceHistory') {
       fetchItemPriceAnalysis();
-    } else if (activeTab === 'priceChange') {
-      fetchPriceChangeReport();
+    } else if (activeTab === 'checkinInvoices') {
+      fetchCheckinInvoices();
     }
-  }, [activeTab, dateFilter, pagination.page, supplierId, categoryId, seasonalMonth, seasonalCategory, priceChangeDateFilter, priceChangeItemFilter]);
+  }, [activeTab, dateFilter, pagination.page, supplierId, categoryId, seasonalMonth, seasonalCategory, checkinInvoiceDateFilter, checkinInvoiceSupplier]);
 
   const fetchSuppliers = async () => {
     try {
@@ -337,18 +338,18 @@ const Reports: React.FC = () => {
     }
   };
 
-  const fetchPriceChangeReport = async () => {
-    showLoading('Loading price change report...');
+  const fetchCheckinInvoices = async () => {
+    showLoading('Loading check-in invoices...');
     try {
       const now = new Date();
       let startDate: string, endDate: string;
-      if (priceChangeDateFilter === 'last7days') {
+      if (checkinInvoiceDateFilter === 'last7days') {
         startDate = new Date(Date.now() - 7 * 86400000).toISOString();
         endDate = new Date().toISOString();
-      } else if (priceChangeDateFilter === 'last30days') {
+      } else if (checkinInvoiceDateFilter === 'last30days') {
         startDate = new Date(Date.now() - 30 * 86400000).toISOString();
         endDate = new Date().toISOString();
-      } else if (priceChangeDateFilter === 'thismonth') {
+      } else if (checkinInvoiceDateFilter === 'thismonth') {
         startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
         endDate = new Date().toISOString();
       } else {
@@ -356,11 +357,11 @@ const Reports: React.FC = () => {
         endDate = new Date().toISOString();
       }
       const params: any = { startDate, endDate };
-      if (priceChangeItemFilter) params.itemId = priceChangeItemFilter;
-      const response = await reportAPI.getPriceChangeReport(params);
-      setPriceChangeReport(response.data);
+      if (checkinInvoiceSupplier) params.supplierId = checkinInvoiceSupplier;
+      const response = await invoiceAPI.getCheckinInvoices(params);
+      setCheckinInvoices(response.data);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to load price change report');
+      toast.error(error.response?.data?.message || 'Failed to load check-in invoices');
     } finally {
       hideLoading();
     }
@@ -460,9 +461,9 @@ const Reports: React.FC = () => {
             <TrendingUp size={18} />
             Price History
           </button>
-          <button onClick={() => setActiveTab('priceChange')} className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${activeTab === 'priceChange' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-            <TrendingDown size={18} />
-            Price Changes
+          <button onClick={() => setActiveTab('checkinInvoices')} className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${activeTab === 'checkinInvoices' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+            <FileText size={18} />
+            Check-In Invoices
           </button>
         </div>
       </div>
@@ -1278,31 +1279,41 @@ const Reports: React.FC = () => {
                             </td>
                           </tr>
                         ) : (
-                          itemPriceHistory.map((record: any, idx: number) => {
-                            const prevPrice = idx < itemPriceHistory.length - 1 ? parseFloat(itemPriceHistory[idx + 1].price) : null;
-                            const currentPrice = parseFloat(record.price);
-                            const change = prevPrice ? ((currentPrice - prevPrice) / prevPrice * 100).toFixed(2) : null;
-                            
-                            return (
-                              <tr key={record.id} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 text-sm text-gray-900">
-                                  {new Date(record.createdAt).toLocaleString()}
-                                </td>
-                                <td className="px-6 py-4 text-sm font-semibold text-gray-900">
-                                  €{currentPrice.toFixed(2)}
-                                </td>
-                                <td className="px-6 py-4 text-sm">
-                                  {change ? (
-                                    <span className={parseFloat(change) > 0 ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>
-                                      {parseFloat(change) > 0 ? '+' : ''}{change}%
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-400">-</span>
-                                  )}
-                                </td>
-                              </tr>
+                          (() => {
+                            // API returns desc (newest first); reverse to get asc (oldest first = top row)
+                            const asc = [...itemPriceHistory].sort(
+                              (a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
                             );
-                          })
+                            return asc.map((record: any, idx: number) => {
+                              const prevPrice = idx > 0 ? parseFloat(asc[idx - 1].price) : null;
+                              const currentPrice = parseFloat(record.price);
+                              const changePct = prevPrice !== null
+                                ? parseFloat(((currentPrice - prevPrice) / prevPrice * 100).toFixed(2))
+                                : null;
+                              return (
+                                <tr key={record.id} className="hover:bg-gray-50">
+                                  <td className="px-6 py-4 text-sm text-gray-900">
+                                    {new Date(record.createdAt).toLocaleString()}
+                                  </td>
+                                  <td className="px-6 py-4 text-sm font-semibold text-gray-900">
+                                    €{currentPrice.toFixed(2)}
+                                  </td>
+                                  <td className="px-6 py-4 text-sm">
+                                    {changePct !== null ? (
+                                      <span className={`inline-flex items-center gap-1 font-semibold ${
+                                        changePct > 0 ? 'text-red-600' : changePct < 0 ? 'text-green-600' : 'text-gray-500'
+                                      }`}>
+                                        {changePct > 0 ? '▲' : changePct < 0 ? '▼' : '='}
+                                        {changePct > 0 ? '+' : ''}{changePct.toFixed(2)}%
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-400 text-xs italic">Initial price</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            });
+                          })()
                         )}
                       </tbody>
                     </table>
@@ -1313,14 +1324,14 @@ const Reports: React.FC = () => {
           )}
         </div>
       )}
-      {/* Price Change Report */}
-      {activeTab === 'priceChange' && (
+      {/* Check-In Invoices Report */}
+      {activeTab === 'checkinInvoices' && (
         <div className="space-y-4">
           {/* Filters */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-wrap gap-3 items-center">
             <select
-              value={priceChangeDateFilter}
-              onChange={e => setPriceChangeDateFilter(e.target.value)}
+              value={checkinInvoiceDateFilter}
+              onChange={e => setCheckinInvoiceDateFilter(e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
             >
               <option value="last7days">Last 7 Days</option>
@@ -1329,86 +1340,103 @@ const Reports: React.FC = () => {
               <option value="overall">All Time</option>
             </select>
             <select
-              value={priceChangeItemFilter}
-              onChange={e => setPriceChangeItemFilter(e.target.value)}
+              value={checkinInvoiceSupplier}
+              onChange={e => setCheckinInvoiceSupplier(e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
             >
-              <option value="">All Items</option>
-              {itemPriceAnalysis.map(i => (
-                <option key={i.itemId} value={i.itemId}>{i.itemName}</option>
+              <option value="">All Suppliers</option>
+              {suppliers.map(s => (
+                <option key={s.supplierId} value={s.supplierId}>{s.supplierName}</option>
               ))}
             </select>
-            {priceChangeItemFilter && (
-              <button onClick={() => setPriceChangeItemFilter('')} className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm">
-                Clear
-              </button>
+            {checkinInvoiceSupplier && (
+              <button onClick={() => setCheckinInvoiceSupplier('')} className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm">Clear</button>
             )}
-            <span className="ml-auto text-sm text-gray-500">{priceChangeReport.length} change(s)</span>
+            <span className="ml-auto text-sm text-gray-500">{checkinInvoices.length} invoice(s)</span>
           </div>
 
           {/* Table */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100">
             <div className="p-5 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Price Change Report</h3>
-              <p className="text-sm text-gray-500 mt-0.5">Tracks every price update recorded during check-in</p>
+              <h3 className="text-lg font-semibold text-gray-900">Check-In Invoices</h3>
+              <p className="text-sm text-gray-500 mt-0.5">Supplier invoices recorded during check-in</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
+                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invoice #</th>
                     <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier</th>
-                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">Old Price</th>
-                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">New Price</th>
-                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">Difference</th>
-                    <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">% Change</th>
                     <th className="px-5 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                    <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Qty</th>
+                    <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                    <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 uppercase">Tax</th>
+                    <th className="px-5 py-3 text-right text-xs font-medium text-gray-500 uppercase">Grand Total</th>
+                    <th className="px-5 py-3 text-center text-xs font-medium text-gray-500 uppercase">Details</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {priceChangeReport.length === 0 ? (
+                  {checkinInvoices.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-5 py-12 text-center text-gray-400">
-                        <TrendingUp className="w-10 h-10 mx-auto mb-2 text-gray-300" />
-                        <p>No price changes recorded in this period</p>
-                        <p className="text-xs mt-1">Price changes are recorded when you modify the rate during check-in</p>
+                      <td colSpan={8} className="px-5 py-12 text-center text-gray-400">
+                        <FileText className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+                        <p>No check-in invoices found</p>
                       </td>
                     </tr>
                   ) : (
-                    priceChangeReport.map((row: any, idx: number) => (
-                      <tr key={idx} className={`hover:bg-gray-50 ${
-                        row.direction === 'increased' ? 'bg-red-50/40' :
-                        row.direction === 'decreased' ? 'bg-green-50/40' : ''
-                      }`}>
-                        <td className="px-5 py-3">
-                          <p className="text-sm font-medium text-gray-900">{row.itemName}</p>
-                          <p className="text-xs text-gray-400">{row.itemCode}</p>
-                        </td>
-                        <td className="px-5 py-3 text-sm text-gray-600">{row.supplier}</td>
-                        <td className="px-5 py-3 text-sm text-gray-700">€{row.oldPrice.toFixed(2)}</td>
-                        <td className="px-5 py-3 text-sm font-semibold text-gray-900">€{row.newPrice.toFixed(2)}</td>
-                        <td className="px-5 py-3 text-sm font-semibold">
-                          <span className={row.direction === 'increased' ? 'text-red-600' : row.direction === 'decreased' ? 'text-green-600' : 'text-gray-500'}>
-                            {row.difference > 0 ? '+' : ''}€{row.difference.toFixed(2)}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                            row.direction === 'increased' ? 'bg-red-100 text-red-700' :
-                            row.direction === 'decreased' ? 'bg-green-100 text-green-700' :
-                            'bg-gray-100 text-gray-600'
-                          }`}>
-                            {row.direction === 'increased' ? '▲' : row.direction === 'decreased' ? '▼' : '='}
-                            {row.percentChange === null
-                              ? 'N/A'
-                              : `${row.percentChange > 0 ? '+' : ''}${row.percentChange.toFixed(2)}%`
-                            }
-                          </span>
-                        </td>
-                        <td className="px-5 py-3 text-sm text-gray-500">
-                          {new Date(row.changedOn).toLocaleString()}
-                        </td>
-                      </tr>
+                    checkinInvoices.map((inv: any) => (
+                      <React.Fragment key={inv.invoiceId}>
+                        <tr className="hover:bg-gray-50">
+                          <td className="px-5 py-3 text-sm font-medium text-gray-900">{inv.invoiceNumber}</td>
+                          <td className="px-5 py-3 text-sm text-gray-600">{inv.supplierName}</td>
+                          <td className="px-5 py-3 text-sm text-gray-600">{new Date(inv.invoiceDate).toLocaleDateString()}</td>
+                          <td className="px-5 py-3 text-sm text-right text-gray-900">{inv.totalQuantity}</td>
+                          <td className="px-5 py-3 text-sm text-right text-gray-900">€{Number(inv.totalAmount).toFixed(2)}</td>
+                          <td className="px-5 py-3 text-sm text-right text-orange-600">€{Number(inv.totalTax).toFixed(2)}</td>
+                          <td className="px-5 py-3 text-sm text-right font-bold text-gray-900">€{Number(inv.grandTotal).toFixed(2)}</td>
+                          <td className="px-5 py-3 text-center">
+                            <button
+                              onClick={() => setExpandedCheckinInvoice(expandedCheckinInvoice === inv.invoiceId ? null : inv.invoiceId)}
+                              className="text-blue-600 hover:text-blue-800 text-xs font-medium"
+                            >
+                              {expandedCheckinInvoice === inv.invoiceId ? 'Hide' : 'View Items'}
+                            </button>
+                          </td>
+                        </tr>
+                        {expandedCheckinInvoice === inv.invoiceId && (
+                          <tr>
+                            <td colSpan={8} className="px-5 py-3 bg-blue-50">
+                              <p className="text-xs font-semibold text-gray-600 mb-2">Items in this invoice:</p>
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="text-gray-500">
+                                    <th className="text-left pb-1">Item</th>
+                                    <th className="text-left pb-1">Code</th>
+                                    <th className="text-right pb-1">Qty</th>
+                                    <th className="text-right pb-1">Rate</th>
+                                    <th className="text-right pb-1">Tax %</th>
+                                    <th className="text-right pb-1">Tax Amt</th>
+                                    <th className="text-right pb-1">Total</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-blue-100">
+                                  {inv.lineItems.map((li: any, idx: number) => (
+                                    <tr key={idx}>
+                                      <td className="py-1 text-gray-900">{li.itemName}</td>
+                                      <td className="py-1 text-gray-500">{li.itemCode}</td>
+                                      <td className="py-1 text-right">{li.quantity}</td>
+                                      <td className="py-1 text-right">€{Number(li.rate).toFixed(2)}</td>
+                                      <td className="py-1 text-right">{li.taxPercent}%</td>
+                                      <td className="py-1 text-right text-orange-600">€{Number(li.taxAmount).toFixed(2)}</td>
+                                      <td className="py-1 text-right font-semibold">€{Number(li.totalAmount).toFixed(2)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))
                   )}
                 </tbody>

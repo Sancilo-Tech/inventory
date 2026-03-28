@@ -6,6 +6,7 @@ import { useLocation } from "../context/LocationContext";
 import { useLoading } from "../context/LoadingContext";
 import { toast } from "react-toastify";
 import { calcPricing, isPriceChanged } from "../utils/pricing";
+import FinalizeCheckinModal from "../components/FinalizeCheckinModal";
 
 interface ItemMaster {
   itemId: string;
@@ -36,12 +37,14 @@ const CheckIn: React.FC = () => {
   const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
   const [showBill, setShowBill] = useState(false);
   const [billData, setBillData] = useState<any>(null);
+  const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [todayStats, setTodayStats] = useState({ checkInCount: 0, checkOutCount: 0 });
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const { user } = useAuth();
   const { selectedLocation } = useLocation();
-  const { showLoading, hideLoading } = useLoading();
+  // showLoading/hideLoading kept for future use
+  const { showLoading: _sl, hideLoading: _hl } = useLoading();
 
   useEffect(() => { fetchTodayStats(); fetchAllItems(); }, []);
 
@@ -118,47 +121,16 @@ const CheckIn: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (scannedItems.length === 0) { toast.error("Please add items first"); return; }
-
     const invalid = scannedItems.find(i => i.rate <= 0);
     if (invalid) { toast.error(`Rate must be > 0 for "${invalid.itemName}"`); return; }
+    setShowFinalizeModal(true);
+  };
 
-    showLoading("Processing check-in...");
-    try {
-      const items = scannedItems.map(item => ({
-        item_id: item.itemId,
-        quantity: Number(item.quantity),
-        quantityType: item.quantityType,
-        price: Number(item.rate),
-        applyNewPrice: item.applyNewPrice,
-        notes: item.notes,
-      }));
-
-      const response = await productAPI.batchCheckIn({ items });
-
-      const totalAmount = response.data.items.reduce((sum: number, item: any) => {
-        const { totalPrice } = calcPricing(Number(item.price), Number(item.taxPercent || 0));
-        return sum + totalPrice * Number(item.quantity);
-      }, 0);
-
-      setBillData({
-        items: response.data.items,
-        count: response.data.count,
-        totalAmount,
-        user: user?.full_name,
-        location: selectedLocation?.locationName,
-        timestamp: new Date().toLocaleString(),
-      });
-
-      setShowBill(true);
-      toast.success(`${response.data.count} items checked in`);
-      setScannedItems([]);
-      fetchTodayStats();
-      fetchAllItems();
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || "Check-in failed");
-    } finally {
-      hideLoading();
-    }
+  const handleFinalizeSuccess = () => {
+    setShowFinalizeModal(false);
+    setScannedItems([]);
+    fetchTodayStats();
+    fetchAllItems();
   };
 
   return (
@@ -347,6 +319,15 @@ const CheckIn: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Finalize Check-In Modal */}
+      {showFinalizeModal && (
+        <FinalizeCheckinModal
+          scannedItems={scannedItems}
+          onSuccess={handleFinalizeSuccess}
+          onCancel={() => setShowFinalizeModal(false)}
+        />
+      )}
 
       {/* Bill modal */}
       {showBill && billData && (

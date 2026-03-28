@@ -407,6 +407,175 @@ static async autoInvoice(req: any, res: Response, next: NextFunction) {
             next(err);
         }
     }
+
+    // ── CHECKIN INVOICE ──────────────────────────────────────────────────────
+    static async finalizeCheckin(req: any, res: Response, next: NextFunction) {
+        try {
+            const { invoice_number, supplier_id, invoice_date, items } = req.body;
+            const locationId = req.headers.location_id as string;
+            const userId = req.user.id as string;
+
+            if (!locationId) { res.status(400).json({ message: 'Location ID required' }); return; }
+            if (!invoice_number?.trim()) { res.status(400).json({ message: 'Invoice number required' }); return; }
+            if (!supplier_id) { res.status(400).json({ message: 'Supplier required' }); return; }
+            if (!invoice_date) { res.status(400).json({ message: 'Invoice date required' }); return; }
+            if (!Array.isArray(items) || items.length === 0) { res.status(400).json({ message: 'At least one item required' }); return; }
+
+            // Duplicate check: same invoice_number + supplier + checkin type
+            const duplicate = await prisma.invoice.findFirst({
+                where: { invoiceNumber: invoice_number.trim(), supplierId: supplier_id, invoiceType: 'checkin' }
+            });
+            if (duplicate) { res.status(409).json({ message: `Invoice ${invoice_number} already exists for this supplier` }); return; }
+
+            const result = await prisma.$transaction(async (tx) => {
+                let totalQty = 0;
+                let totalAmount = 0;
+                let totalTax = 0;
+
+                const processedItems: { item_id: string; quantity: number; rate: number; taxPercent: number; taxAmount: number; lineTotal: number; applyNewPrice: boolean; quantityType: string; notes: string }[] = [];
+
+                for (const it of items) {
+                    const item = await tx.itemMaster.findFirst({ where: { itemId: it.item_id, locationId } });
+                    if (!item) throw new Error(`Item ${it.item_id} not found`);
+
+                    const qty = Number(it.quantity);
+                    const rate = Number(it.rate);
+                    const taxPct = Number(it.tax_percent ?? item.taxPercent ?? 0);
+                    const taxAmt = parseFloat(((rate * taxPct) / 100).toFixed(2));
+                    const lineTotal = parseFloat((rate + taxAmt).toFixed(2)) * qty;
+
+                    totalQty += qty;
+                    totalAmount += rate * qty;
+                    totalTax += taxAmt * qty;
+
+                    processedItems.push({ item_id: it.item_id, quantity: qty, rate, taxPercent: taxPct, taxAmount: taxAmt, lineTotal, applyNewPrice: it.applyNewPrice !== false, quantityType: it.quantityType || item.quantityType, notes: it.notes || '' });
+                }
+
+                const grandTotal = parseFloat((totalAmount + totalTax).toFixed(2));
+
+                // Create invoice record
+                const invoice = await tx.invoice.create({
+                    data: {
+                        invoiceNumber: invoice_number.trim(),
+                        invoiceName: `Checkin - ${invoice_number.trim()}`,
+                        supplierId: supplier_id,
+                        amount: parseFloat(totalAmount.toFixed(2)),
+                        invoiceDate: new Date(invoice_date),
+                        dueDate: new Date(invoice_date),
+                        locationId,
+                        createdBy: userId,
+                        invoiceType: 'checkin',
+                        status: 'paid',
+                        taxAmount: parseFloat(totalTax.toFixed(2)),
+                        totalQuantity: parseFloat(totalQty.toFixed(2)),
+                        grandTotal,
+                    }
+                });
+
+                // Process each item: update stock + price history + transaction log
+                for (const it of processedItems) {
+                    const item = await tx.itemMaster.findFirst({ where: { itemId: it.item_id } });
+                    if (!item) continue;
+
+                    const newQty = Number(item.currentQty) + it.quantity;
+                    const oldPrice = Number(item.purchasePrice);
+                    const priceChanged = Math.abs(oldPrice - it.rate) > 0.001;
+
+                    const updateData: { currentQty: number; purchasePrice?: number; totalAmount?: number } = { currentQty: newQty };
+
+                    if (priceChanged && it.rate > 0 && it.applyNewPrice) {
+                        updateData.purchasePrice = it.rate;
+                        updateData.totalAmount = it.rate + it.taxAmount;
+
+                        const existingHistory = await tx.itemPriceMaster.count({ where: { itemId: it.item_id } });
+                        if (existingHistory === 0 && oldPrice > 0) {
+                            await tx.itemPriceMaster.create({ data: { itemId: it.item_id, price: oldPrice } });
+                        }
+                        await tx.itemPriceMaster.create({ data: { itemId: it.item_id, price: it.rate } });
+                    }
+
+                    await tx.itemMaster.update({ where: { itemId: it.item_id }, data: updateData });
+
+                    await tx.transactionLog.create({
+                        data: {
+                            itemId: it.item_id,
+                            transactionType: 'checkin',
+                            quantity: it.quantity,
+                            quantityType: it.quantityType as any,
+                            remainingQty: newQty,
+                            takenById: userId,
+                            remarks: `invoice:${invoice.invoiceId}`,
+                        }
+                    });
+                }
+
+                return { invoice, totalQty, totalAmount, totalTax, grandTotal };
+            });
+
+            res.status(201).json(result);
+        } catch (err: any) {
+            if (err.message?.startsWith('Item ')) { res.status(400).json({ message: err.message }); return; }
+            next(err);
+        }
+    }
+
+    static async getCheckinInvoices(req: any, res: Response, next: NextFunction) {
+        try {
+            const locationId = req.headers.location_id as string;
+            const { startDate, endDate, supplierId } = req.query;
+
+            if (!locationId) { res.status(400).json({ message: 'Location ID required' }); return; }
+
+            const where: any = { locationId, invoiceType: 'checkin' };
+            if (supplierId) where.supplierId = supplierId;
+            if (startDate && endDate) {
+                where.invoiceDate = { gte: new Date(startDate as string), lte: new Date(endDate as string) };
+            }
+
+            const invoices = await prisma.invoice.findMany({
+                where,
+                orderBy: { invoiceDate: 'desc' },
+            });
+
+            // Attach supplier name and item breakdown
+            const enriched = await Promise.all(invoices.map(async (inv) => {
+                const supplier = inv.supplierId
+                    ? await prisma.supplierMaster.findUnique({ where: { supplierId: inv.supplierId }, select: { supplierName: true } })
+                    : null;
+
+                const txLogs = await prisma.transactionLog.findMany({
+                    where: { remarks: `invoice:${inv.invoiceId}` },
+                    include: { item: { select: { itemName: true, itemCode: true, taxPercent: true, purchasePrice: true } } }
+                });
+
+                const lineItems = txLogs.map(t => ({
+                    itemName: t.item.itemName,
+                    itemCode: t.item.itemCode,
+                    quantity: Number(t.quantity),
+                    rate: Number(t.item.purchasePrice),
+                    taxPercent: Number(t.item.taxPercent ?? 0),
+                    taxAmount: parseFloat(((Number(t.item.purchasePrice) * Number(t.item.taxPercent ?? 0)) / 100).toFixed(2)),
+                    totalAmount: parseFloat((Number(t.item.purchasePrice) * (1 + Number(t.item.taxPercent ?? 0) / 100) * Number(t.quantity)).toFixed(2)),
+                }));
+
+                return {
+                    invoiceId: inv.invoiceId,
+                    invoiceNumber: inv.invoiceNumber,
+                    supplierName: supplier?.supplierName ?? '-',
+                    invoiceDate: inv.invoiceDate,
+                    totalQuantity: Number(inv.totalQuantity ?? 0),
+                    totalAmount: Number(inv.amount),
+                    totalTax: Number(inv.taxAmount ?? 0),
+                    grandTotal: Number(inv.grandTotal ?? 0),
+                    lineItems,
+                };
+            }));
+
+            res.status(200).json(enriched);
+        } catch (err) {
+            next(err);
+        }
+    }
 }
 
 

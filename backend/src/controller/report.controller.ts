@@ -1045,6 +1045,32 @@ export class ReportController {
 
             const rows: any[] = [];
             itemMap.forEach((entries) => {
+                // Handle items with only 1 price history entry:
+                // The single entry IS the new price; the item's current purchasePrice
+                // equals it (already updated), so we can't recover the old price here.
+                // These will be shown with oldPrice = 0 / percentChange = null.
+                if (entries.length === 1) {
+                    const entry = entries[0];
+                    const changedOn = new Date(entry.createdAt);
+                    if (rangeStart && changedOn < rangeStart) return;
+                    if (rangeEnd   && changedOn > rangeEnd)   return;
+                    const newPrice = Number(entry.price);
+                    rows.push({
+                        itemId:        entry.itemId,
+                        itemCode:      entry.item.itemCode,
+                        itemName:      entry.item.itemName,
+                        supplier:      entry.item.supplier?.supplierName ?? '-',
+                        category:      entry.item.type?.typeName ?? '-',
+                        oldPrice:      0,
+                        newPrice,
+                        difference:    newPrice,
+                        percentChange: null,
+                        changedOn:     entry.createdAt,
+                        direction:     'increased',
+                    });
+                    return;
+                }
+
                 for (let i = 0; i < entries.length - 1; i++) {
                     const newEntry = entries[i];       // more recent
                     const oldEntry = entries[i + 1];   // previous

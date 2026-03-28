@@ -22,6 +22,8 @@ route.put("/auto/update-status/:invoiceId", asyncHandler(InvoiceController.updat
 route.put("/auto/update/:invoiceId", asyncHandler(InvoiceController.updateAutoInvoiceDetail));
 route.delete("/auto/delete/:invoiceId", asyncHandler(InvoiceController.deleteAutoInvoice));
 
-
+// checkin invoice
+route.post("/checkin/finalize", asyncHandler(InvoiceController.finalizeCheckin));
+route.get("/checkin/all", asyncHandler(InvoiceController.getCheckinInvoices));
 
 export default route;

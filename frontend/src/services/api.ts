@@ -157,6 +157,8 @@ export const invoiceAPI = {
   updateAutoInvoiceStatus: (invoiceId: string, data: any) => api.put(`/invoice/auto/update-status/${invoiceId}`, data),
   updateAutoInvoiceDetail: (invoiceId: string, data: any) => api.put(`/invoice/auto/update/${invoiceId}`, data),
   deleteAutoInvoice: (invoiceId: string) => api.delete(`/invoice/auto/delete/${invoiceId}`),
+  finalizeCheckin: (data: any) => api.post('/invoice/checkin/finalize', data),
+  getCheckinInvoices: (params?: any) => api.get('/invoice/checkin/all', { params }),
 };
 
 export const dashboardAPI = {

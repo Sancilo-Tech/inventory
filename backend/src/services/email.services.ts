@@ -2,7 +2,7 @@ import { transporter, mailGenerator } from "../config/email.config";
 import { User } from "../model/user.model";
 import nodeMailer from 'nodemailer';
 const company_name = "ABC Company";
-const domain = "http://localhost:3000";
+const domain = "https://inventory-silk-kappa.vercel.app/";
 export class EmailServices {
 
     static registerEmail(passcode: string, user: User) {

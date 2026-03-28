@@ -20,7 +20,7 @@ export function generatePassword({
   if (uppercase) charset += "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   if (lowercase) charset += "abcdefghijklmnopqrstuvwxyz";
   if (numbers) charset += "0123456789";
-  if (symbols) charset += "!@#$%^&*()-_=+[]{}<>?";
+  if (symbols) charset += "@$_";
 
   if (!charset) {
     throw new Error("At least one character type must be enabled");

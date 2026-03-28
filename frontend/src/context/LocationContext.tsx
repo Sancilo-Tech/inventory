@@ -1,7 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { locationAPI } from '../services/api';
 import { useAuth } from './AuthContext';
 
 interface Location {
@@ -23,60 +21,35 @@ interface LocationContextType {
 const LocationContext = createContext<LocationContextType | undefined>(undefined);
 
 export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [selectedLocation, setSelectedLocationState] = useState<Location | null>(() => {
-    const saved = localStorage.getItem('selectedLocation');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [selectedLocation, setSelectedLocationState] = useState<Location | null>(null);
   const { user } = useAuth();
 
+  // Restore location from user-keyed localStorage whenever user changes
   useEffect(() => {
-    // Only load user location if user is authenticated
-    if (user) {
-      const loadUserLocation = async () => {
-        try {
-          const response = await locationAPI.getUserLocationById();
-          if (response?.data?.location) {
-            const userLocation = response.data.location;
-            setSelectedLocationState(userLocation);
-            localStorage.setItem('selectedLocation', JSON.stringify(userLocation));
-          }
-        } catch (error) {
-          console.error('Error loading user location:', error);
-          // Fallback to localStorage if API fails
-          const saved = localStorage.getItem('selectedLocation');
-          if (saved) {
-            setSelectedLocationState(JSON.parse(saved));
-          }
-        }
-      };
-      loadUserLocation();
+    if (!user) {
+      setSelectedLocationState(null);
+      return;
     }
+    const key = `selectedLocation_${user.user_id}`;
+    const saved = localStorage.getItem(key);
+    setSelectedLocationState(saved ? JSON.parse(saved) : null);
   }, [user]);
+
+  const storageKey = user ? `selectedLocation_${user.user_id}` : null;
 
   const setSelectedLocation = async (location: Location | null) => {
     setSelectedLocationState(location);
-    try {
-      if (location) {
-        await locationAPI.assignLocation({ locationId: location.locationId });
-        localStorage.setItem('selectedLocation', JSON.stringify(location));
-        window.location.reload();
-      } else {
-        await locationAPI.assignLocation({ locationId: "" });
-        localStorage.removeItem('selectedLocation');
-      }
-    } catch (error) {
-      console.error('Error setting location:', error);
+    if (location && storageKey) {
+      localStorage.setItem(storageKey, JSON.stringify(location));
+      window.location.reload();
+    } else if (storageKey) {
+      localStorage.removeItem(storageKey);
     }
   };
 
-  const clearLocation = async () => {
+  const clearLocation = () => {
     setSelectedLocationState(null);
-    try {
-      await locationAPI.assignLocation({ locationId: "" });
-      localStorage.removeItem('selectedLocation');
-    } catch (error) {
-      console.error('Error clearing location:', error);
-    }
+    if (storageKey) localStorage.removeItem(storageKey);
   };
 
   return (

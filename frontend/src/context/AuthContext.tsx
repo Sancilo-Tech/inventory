@@ -65,8 +65,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = async() => {
+    const stored = localStorage.getItem('inventory-user');
+    if (stored) {
+      const u = JSON.parse(stored);
+      localStorage.removeItem(`selectedLocation_${u.user_id}`);
+    }
     setUser(null);
-   await authAPI.logout();
+    await authAPI.logout();
     localStorage.removeItem('inventory-token');
     localStorage.removeItem('inventory-user');
   };

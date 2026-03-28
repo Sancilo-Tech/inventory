@@ -14,13 +14,18 @@ const api = axios.create({
 // Request interceptor to add auth token
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('inventory-token');
-  const selectedLocation = localStorage.getItem('selectedLocation');
+  const userData = localStorage.getItem('inventory-user');
   if (token) {
     config.headers.access_token = token;
   }
-  if (selectedLocation) {
-    const location = JSON.parse(selectedLocation);
-    config.headers.location_id = location.locationId;
+  if (userData) {
+    const user = JSON.parse(userData);
+    const locationKey = `selectedLocation_${user.user_id}`;
+    const selectedLocation = localStorage.getItem(locationKey);
+    if (selectedLocation) {
+      const location = JSON.parse(selectedLocation);
+      config.headers.location_id = location.locationId;
+    }
   }
   return config;
 });
@@ -30,6 +35,11 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      const userData = localStorage.getItem('inventory-user');
+      if (userData) {
+        const user = JSON.parse(userData);
+        localStorage.removeItem(`selectedLocation_${user.user_id}`);
+      }
       localStorage.removeItem('inventory-token');
       localStorage.removeItem('inventory-user');
       window.location.href = '/login';

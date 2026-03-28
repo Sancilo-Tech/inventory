@@ -102,16 +102,16 @@ const Settings: React.FC = () => {
               </button>
               {showLocationDropdown && (
                 <div className="absolute top-full mt-2 left-0 bg-white rounded-lg shadow-lg border border-gray-200 py-2 w-full md:min-w-[300px] z-50">
-                  {availableLocations.length === 0 ? (
+                  {availableLocations.filter(loc => loc.locationId !== selectedLocation?.locationId).length === 0 ? (
                     <div className="px-4 py-2 text-sm text-gray-500">No other locations</div>
                   ) : (
-                    availableLocations.map((loc) => (
+                    availableLocations
+                      .filter(loc => loc.locationId !== selectedLocation?.locationId)
+                      .map((loc) => (
                       <button
                         key={loc.locationId}
                         onClick={() => handleLocationChange(loc)}
-                        className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${
-                          loc.locationId === selectedLocation?.locationId ? 'bg-green-50' : ''
-                        }`}
+                        className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors"
                       >
                         <div className="font-medium text-gray-900">{loc.locationName}</div>
                         <div className="text-xs text-gray-500">{loc.locationCode}</div>

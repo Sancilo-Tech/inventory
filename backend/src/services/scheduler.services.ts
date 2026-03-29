@@ -6,66 +6,44 @@ import { transporter, mailGenerator } from "../config/email.config";
 const company_name = "ABC Company";
 
 export const startScheduler = () => {
-  // Runs every day at 6 PM
+  // Runs every day at 6 PM Germany time
   cron.schedule("0 18 * * *", async () => {
     console.log("Running daily report scheduler...");
     await sendDailyReport();
-  });
+  }, { timezone: "Europe/Berlin" });
+
   cron.schedule("0 6 * * *", async () => {
     console.log("Running daily morning scheduler...");
     const data = await prisma.autoInvoice.findMany({
-      where: {
-        frequency: 'daily',
-        isDisable: false,
-      }
-    })
-    
- console.log(data)
- data.map((datax)=>{
-  createInvoice(datax)
+      where: { frequency: 'daily', isDisable: false }
+    });
+    console.log(data);
+    data.map((datax) => { createInvoice(datax); });
+  }, { timezone: "Europe/Berlin" });
 
- })   
-  });
   cron.schedule("0 6 * * 1", async () => {
     console.log("Running monday morning scheduler...");
     const data = await prisma.autoInvoice.findMany({
-      where: {
-        frequency: 'weekly',
-        isDisable: false
-      }
-    })
-    data.map((datax)=>{
-      createInvoice(datax)
+      where: { frequency: 'weekly', isDisable: false }
+    });
+    data.map((datax) => { createInvoice(datax); });
+  }, { timezone: "Europe/Berlin" });
 
-    })
-    
-  });
   cron.schedule("0 6 1 * *", async () => {
     console.log("Running month day1 morning scheduler...");
     const data = await prisma.autoInvoice.findMany({
-      where: {
-        frequency: 'monthly',
-        isDisable: false
-      }
-    })
-    data.map((datax)=>{
-      createInvoice(datax)
-    })
-    
-  });
+      where: { frequency: 'monthly', isDisable: false }
+    });
+    data.map((datax) => { createInvoice(datax); });
+  }, { timezone: "Europe/Berlin" });
+
   cron.schedule("0 6 1 1 *", async () => {
-    console.log("Running month day1 morning scheduler...");
+    console.log("Running yearly scheduler...");
     const data = await prisma.autoInvoice.findMany({
-      where: {
-        frequency: 'yearly',
-        isDisable: false
-      }
-    })
-    data.map((datax)=>{
-      createInvoice(datax)
-    })
-    
-  });
+      where: { frequency: 'yearly', isDisable: false }
+    });
+    data.map((datax) => { createInvoice(datax); });
+  }, { timezone: "Europe/Berlin" });
 };
 
 const createInvoice = async (data: any) => {

@@ -247,7 +247,7 @@ const PaymentTracker: React.FC = () => {
         invoice_number: invoice.invoiceNumber,
         invoice_name: invoice.invoiceName,
         supplier_id: invoice.supplierId || '',
-        amount: invoice.amount.toString(),
+        amount: (parseFloat(invoice.amount)+parseFloat(invoice.taxAmount)).toString(),
         tax_id: invoice.taxId || '',
         invoice_date: new Date(invoice.invoiceDate).toISOString().split('T')[0],
         due_date: new Date(invoice.dueDate).toISOString().split('T')[0],
@@ -459,8 +459,8 @@ const PaymentTracker: React.FC = () => {
               {Object.entries(taxGroups).sort(([a], [b]) => parseFloat(a) - parseFloat(b)).map(([pct, vals]) => (
                 <div key={pct} className="flex flex-col bg-gray-50 rounded-lg px-3 py-1">
                   <span className="text-xs text-gray-500 uppercase">Tax {pct} Group</span>
-                  <span className="text-sm font-bold text-gray-800">Total: €{vals.total.toFixed(2)}</span>
-                  <span className="text-xs text-gray-500">Base: €{vals.amount.toFixed(2)} · Tax: €{vals.tax.toFixed(2)}</span>
+                  <span className="text-sm text-gray-800">Total: €{vals.total.toFixed(2)}</span>
+                  <span className="text-xs text-gray-500">Base: €{vals.amount.toFixed(2)} · Tax: <span className="font-bold text-orange-600 text-base bg-orange-50 px-1 rounded">€{vals.tax.toFixed(2)}</span></span>
                 </div>
               ))}
             </div>
@@ -564,7 +564,7 @@ const PaymentTracker: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Amount (incl. tax) *</label>
-                  <input type="number" step="1" min="0" required value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  <input type="number" step="0.1" min="0" required value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Tax *</label>

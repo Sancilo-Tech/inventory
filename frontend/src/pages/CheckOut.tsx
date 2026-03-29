@@ -57,7 +57,14 @@ const CheckOut: React.FC = () => {
       i => i.itemCode.toLowerCase() === query || (i.barcode && i.barcode.toLowerCase() === query)
     );
 
-    if (item) { addItemToBatch(item); setSearchValue(''); toast.success('Item added'); }
+    if (item) {
+      if (item.currentQty <= 0) {
+        toast.error(`"${item.itemName}" is not available (out of stock)`);
+        setSearchValue('');
+        searchInputRef.current?.focus();
+        return;
+      }
+      addItemToBatch(item); setSearchValue(''); toast.success('Item added'); }
     else { toast.error('Item not found'); setSearchValue(''); }
     searchInputRef.current?.focus();
   };
@@ -66,10 +73,13 @@ const CheckOut: React.FC = () => {
     const existing = scannedItems.find(i => i.itemId === item.itemId);
     const taxPct = Number(item.tax?.taxPercentage ?? item.taxPercent ?? 0);
     if (existing) {
+      const newQty = existing.quantity + Number(item.defaultDecrease || 1);
+      if (newQty > item.currentQty) {
+        toast.error(`Quantity cannot exceed available stock (${item.currentQty} units) for "${item.itemName}"`);
+        return;
+      }
       setScannedItems(prev => prev.map(i =>
-        i.itemId === item.itemId
-          ? { ...i, quantity: i.quantity + Number(item.defaultDecrease || 1) }
-          : i
+        i.itemId === item.itemId ? { ...i, quantity: newQty } : i
       ));
     } else {
       setScannedItems(prev => [...prev, {
@@ -81,8 +91,14 @@ const CheckOut: React.FC = () => {
     }
   };
 
-  const updateQty = (itemId: string, quantity: number) =>
+  const updateQty = (itemId: string, quantity: number) => {
+    const item = scannedItems.find(i => i.itemId === itemId);
+    if (item && quantity > item.currentQty) {
+      toast.error(`Quantity cannot exceed available stock (${item.currentQty} units) for "${item.itemName}"`);
+      return;
+    }
     setScannedItems(prev => prev.map(i => i.itemId === itemId ? { ...i, quantity } : i));
+  };
 
   const removeItem = (itemId: string) =>
     setScannedItems(prev => prev.filter(i => i.itemId !== itemId));
@@ -98,6 +114,8 @@ const CheckOut: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (scannedItems.length === 0) { toast.error('Please add items first'); return; }
+    const overStock = scannedItems.find(i => i.quantity > i.currentQty);
+    if (overStock) { toast.error(`Quantity exceeds available stock (${overStock.currentQty} units) for "${overStock.itemName}"`); return; }
 
     showLoading('Processing check-out...');
     try {
@@ -185,7 +203,22 @@ const CheckOut: React.FC = () => {
                 <span>Subtotal</span>
                 <span>€{scannedItems.reduce((s, i) => s + Number(i.purchasePrice) * i.quantity, 0).toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-sm text-orange-600">
+              {/* Tax groups */}
+              {(() => {
+                const groups: Record<number, number> = {};
+                scannedItems.forEach(i => {
+                  const { taxAmount } = calcPricing(Number(i.purchasePrice), i.taxPercent);
+                  const pct = i.taxPercent;
+                  groups[pct] = (groups[pct] || 0) + taxAmount * i.quantity;
+                });
+                return Object.entries(groups).sort(([a], [b]) => Number(a) - Number(b)).map(([pct, amt]) => (
+                  <div key={pct} className="flex justify-between text-xs text-orange-500 pl-2">
+                    <span>Tax {pct}%</span>
+                    <span>€{amt.toFixed(2)}</span>
+                  </div>
+                ));
+              })()}
+              <div className="flex justify-between text-sm text-orange-600 font-medium">
                 <span>Total Tax</span>
                 <span>€{scannedItems.reduce((s, i) => {
                   const { taxAmount } = calcPricing(Number(i.purchasePrice), i.taxPercent);
@@ -227,7 +260,7 @@ const CheckOut: React.FC = () => {
                       <div>
                         <h3 className="font-semibold text-gray-900">{item.itemName}</h3>
                         <p className="text-sm text-gray-500">{item.itemCode}</p>
-                        <p className="text-xs text-gray-400">Stock: {item.currentQty} {item.quantityType}</p>
+                        <p className="text-xs text-gray-400">Stock: <span className="text-xl font-bold text-red-500">{item.currentQty} unit</span></p>
                       </div>
                       <button onClick={() => removeItem(item.itemId)} className="text-red-500 hover:text-red-700">
                         <Trash2 size={18} />
@@ -246,9 +279,14 @@ const CheckOut: React.FC = () => {
                         type="number"
                         value={item.quantity}
                         onChange={e => updateQty(item.itemId, Number(e.target.value))}
-                        min="0.01" step="0.01"
-                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-400"
+                        min="1" step="1"
+                        className={`w-full px-2 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-red-400 ${
+                          item.quantity > item.currentQty ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                        }`}
                       />
+                      {item.quantity > item.currentQty && (
+                        <p className="text-xs text-red-600 mt-1">Exceeds available stock ({item.currentQty} units)</p>
+                      )}
                     </div>
 
                     {/* Pricing breakdown (read-only) */}

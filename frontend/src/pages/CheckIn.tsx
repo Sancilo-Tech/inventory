@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable react-hooks/immutability */
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Search, ArrowDownCircle, Printer, X, Trash2, ShoppingCart, AlertTriangle } from "lucide-react";
 import { itemAPI, productAPI } from "../services/api";
@@ -179,7 +181,22 @@ const CheckIn: React.FC = () => {
                 <span>Subtotal (excl. tax)</span>
                 <span>€{scannedItems.reduce((s, i) => s + i.rate * i.quantity, 0).toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-sm text-orange-600">
+              {/* Tax groups */}
+              {(() => {
+                const groups: Record<number, number> = {};
+                scannedItems.forEach(i => {
+                  const { taxAmount } = calcPricing(i.rate, i.taxPercent);
+                  const pct = i.taxPercent;
+                  groups[pct] = (groups[pct] || 0) + taxAmount * i.quantity;
+                });
+                return Object.entries(groups).sort(([a], [b]) => Number(a) - Number(b)).map(([pct, amt]) => (
+                  <div key={pct} className="flex justify-between text-xs text-orange-500 pl-2">
+                    <span>Tax {pct}%</span>
+                    <span>€{amt.toFixed(2)}</span>
+                  </div>
+                ));
+              })()}
+              <div className="flex justify-between text-sm text-orange-600 font-medium">
                 <span>Total Tax</span>
                 <span>€{scannedItems.reduce((s, i) => {
                   const { taxAmount } = calcPricing(i.rate, i.taxPercent);
@@ -223,7 +240,7 @@ const CheckIn: React.FC = () => {
                       <div>
                         <h3 className="font-semibold text-gray-900">{item.itemName}</h3>
                         <p className="text-sm text-gray-500">{item.itemCode}</p>
-                        <p className="text-xs text-gray-400">Stock: {item.currentQty} {item.quantityType}</p>
+                        <p className="text-xs text-gray-400">Stock: <span className="text-xl font-bold text-red-500">{item.currentQty} unit</span></p>
                       </div>
                       <button onClick={() => removeItem(item.itemId)} className="text-red-500 hover:text-red-700">
                         <Trash2 size={18} />
@@ -240,7 +257,9 @@ const CheckIn: React.FC = () => {
                             type="checkbox"
                             checked={item.applyNewPrice}
                             onChange={e => updateItem(item.itemId, { applyNewPrice: e.target.checked })}
+                            disabled
                             className="accent-amber-600"
+
                           />
                           Apply to item master
                         </label>
@@ -260,7 +279,7 @@ const CheckIn: React.FC = () => {
                           type="number"
                           value={item.quantity}
                           onChange={e => updateItem(item.itemId, { quantity: Number(e.target.value) })}
-                          min="0.01" step="0.01"
+                          min="1" step="1"
                           className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-400"
                         />
                       </div>

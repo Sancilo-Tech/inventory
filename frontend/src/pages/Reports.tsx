@@ -726,9 +726,9 @@ const Reports: React.FC = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item Code</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item Name</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Current Qty</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ROL</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">MOQ</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">EOQ</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tax %</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Price</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
@@ -740,9 +740,9 @@ const Reports: React.FC = () => {
                     <td className="px-6 py-4 text-sm text-gray-900">{item.itemCode}</td>
                     <td className="px-6 py-4 text-sm text-gray-900">{item.itemName}</td>
                     <td className="px-6 py-4 text-sm text-gray-900">{item.currentQty}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{item.rol}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{item.moq}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{item.eoq}</td>
+                    <td className="px-6 py-4 text-sm text-gray-900">€{parseFloat(item.purchasePrice || 0).toFixed(2)}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{item.taxPercent ?? 0}%</td>
+                    <td className="px-6 py-4 text-sm font-semibold text-gray-900">€{(parseFloat(item.purchasePrice || 0) * (1 + parseFloat(item.taxPercent || 0) / 100)).toFixed(2)}</td>
                     <td className="px-6 py-4">
                       <span className={`px-2 py-1 text-xs rounded-full ${item.status === 'Low Stock' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
                         {item.status}

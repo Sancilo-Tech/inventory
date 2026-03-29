@@ -44,13 +44,14 @@ export class ProductController {
                 }
 
                 await tx.itemMaster.update({ where: { itemId: item_id }, data: updateData });
-
+                console.log(newPrice)
                 const transaction = await tx.transactionLog.create({
                     data: {
                         itemId: item_id,
                         transactionType: 'checkin',
                         quantity,
                         quantityType,
+                        price:newPrice > 0 ? newPrice : oldPrice,
                         remainingQty: newQty,
                         takenById: userId,
                         remarks: notes || null
@@ -88,6 +89,8 @@ export class ProductController {
                 const newQty = Number(item.currentQty) - Number(quantity);
                 if (newQty < 0) throw new Error("Insufficient stock");
 
+                const txPrice = Number(price) > 0 ? Number(price) : Number(item.purchasePrice);
+
                 await tx.itemMaster.update({ where: { itemId: item_id }, data: { currentQty: newQty } });
 
                 const transaction = await tx.transactionLog.create({
@@ -96,13 +99,14 @@ export class ProductController {
                         transactionType: 'checkout',
                         quantity,
                         quantityType,
+                        price: txPrice,
                         remainingQty: newQty,
                         takenById: userId,
                         remarks: notes || null
                     }
                 });
 
-                return { transaction, item: { ...item, currentQty: newQty }, price };
+                return { transaction, item: { ...item, currentQty: newQty }, price: txPrice };
             });
 
             res.status(201).json(result);
@@ -157,13 +161,14 @@ export class ProductController {
                     }
 
                     await tx.itemMaster.update({ where: { itemId: itemData.item_id }, data: updateData });
-
+                    console.log(newPrice)
                     await tx.transactionLog.create({
                         data: {
                             itemId: itemData.item_id,
                             transactionType: 'checkin',
                             quantity: itemData.quantity,
                             quantityType: itemData.quantityType || 'gram',
+                            price: newPrice > 0 ? newPrice : oldPrice,
                             remainingQty: newQty,
                             takenById: userId,
                             remarks: itemData.notes || null
@@ -224,6 +229,7 @@ export class ProductController {
                             transactionType: 'checkout',
                             quantity: itemData.quantity,
                             quantityType: itemData.quantityType || 'gram',
+                            price: Number(itemData.price) > 0 ? Number(itemData.price) : Number(item.purchasePrice),
                             remainingQty: newQty,
                             takenById: userId,
                             remarks: itemData.notes || null

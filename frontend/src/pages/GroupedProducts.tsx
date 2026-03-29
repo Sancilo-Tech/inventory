@@ -28,8 +28,12 @@ const GroupedProducts: React.FC = () => {
     showLoading("Loading grouped products...");
     try {
       const response = await reportAPI.getGroupedProducts();
-      setGroupedItems(response.data.groups || []);
-      setTotalInventoryWorth(parseFloat(response.data.totalInventoryWorth || 0));
+      const groups = response.data.groups || [];
+      setGroupedItems(groups);
+      const total = groups.reduce((sum: number, g: any) =>
+        sum + g.items.reduce((s: number, item: any) => s + item.currentQty * item.purchasePrice, 0), 0
+      );
+      setTotalInventoryWorth(total);
     } catch (error) {
       console.error("Error fetching grouped products:", error);
       toast.error("Failed to load grouped products");
@@ -84,7 +88,8 @@ const GroupedProducts: React.FC = () => {
       
       group.items.forEach((item: any) => {
         const converted = convertToBaseUnit(item.totalQty, item.quantityType);
-        csvContent += `"${item.itemCode}","${item.itemName}","${item.packQty}","${item.currentQty} units","${converted.value.toFixed(2)} ${converted.unit}","€${item.purchasePrice.toFixed(2)}","€${item.itemWorth.toFixed(2)}","${item.supplier || '-'}","${item.category || '-'}"\n`;
+        const itemTotal = item.currentQty * item.purchasePrice;
+        csvContent += `"${item.itemCode}","${item.itemName}","${item.packQty}","${item.currentQty} units","${converted.value.toFixed(2)} ${converted.unit}","€${item.purchasePrice.toFixed(2)}","€${itemTotal.toFixed(2)}","${item.supplier || '-'}","${item.category || '-'}"\n`;
       });
       
       csvContent += "\n";
@@ -165,7 +170,7 @@ const GroupedProducts: React.FC = () => {
                         {formatQuantity(group.totalQty, group.qtyType)}
                       </td>
                       <td className="px-6 py-4 text-sm font-semibold text-green-600">
-                        €{group.totalWorth.toFixed(2)}
+                        €{group.items.reduce((sum: number, item: any) => sum + item.currentQty * item.purchasePrice, 0).toFixed(2)}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">
                         {group.items.length} item(s)
@@ -230,7 +235,7 @@ const GroupedProducts: React.FC = () => {
                                     </div>
                                     <div className="flex justify-between text-xs border-t pt-1">
                                       <span className="text-gray-600 font-semibold">Item Worth:</span>
-                                      <span className="font-semibold text-green-600">€{item.itemWorth.toFixed(2)}</span>
+                                      <span className="font-semibold text-green-600">€{(item.currentQty * item.purchasePrice).toFixed(2)}</span>
                                     </div>
                                     {item.supplier && (
                                       <div className="flex justify-between text-xs">

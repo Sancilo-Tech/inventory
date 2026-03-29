@@ -163,6 +163,7 @@ model TransactionLog {
   remainingQty    Decimal         @map("remaining_qty") @db.Decimal(10, 2)
   takenById       String?         @map("taken_by_id") @db.Uuid
   takenBy         String?         @map("taken_by")
+  price           Decimal         @db.Decimal(10, 2)@default(0)
   quantityType    qtyType         @default(gram) @map("quantity_type")
   remarks         String?
   createdAt       DateTime        @default(now()) @map("created_at")
@@ -228,7 +229,7 @@ model Invoice {
   taxAmount      Decimal?      @map("tax_amount") @db.Decimal(10, 2)
   totalQuantity  Decimal?      @map("total_quantity") @db.Decimal(10, 2)
   grandTotal     Decimal?      @map("grand_total") @db.Decimal(10, 2)
-  @@unique([invoiceNumber,invoiceType])
+  @@unique([invoiceNumber,supplierId,invoiceType])
   @@map("invoices")
 }
 

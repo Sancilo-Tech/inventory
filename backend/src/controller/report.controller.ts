@@ -49,7 +49,7 @@ export class ReportController {
             let totalCheckOutQty = 0;
 
             transactions.forEach(t => {
-                const price = Number(t.item.purchasePrice);
+                const price = Number(t.price);
                 const qty = Number(t.quantity);
                 const taxPercent = Number(t.item.taxPercent || 0);
                 const amount = price * qty;
@@ -131,7 +131,7 @@ export class ReportController {
             ]);
 
             const formattedTransactions = transactions.map(t => {
-                const price = Number(t.item.purchasePrice);
+                const price = Number(t.price);
                 const qty = Number(t.quantity);
                 const taxPercent = Number(t.item.taxPercent || 0);
                 const amount = price * qty;
@@ -213,7 +213,7 @@ export class ReportController {
             const dailyData: any = {};
             transactions.forEach(t => {
                 const date = new Date(t.createdAt).toISOString().split('T')[0];
-                const price = Number(t.item.purchasePrice);
+                const price = Number(t.price);
                 const qty = Number(t.quantity);
                 const taxPercent = Number(t.item.taxPercent || 0);
                 const amount = price * qty;
@@ -578,9 +578,8 @@ export class ReportController {
                 itemCode: item.itemCode,
                 itemName: item.itemName,
                 currentQty: Number(item.currentQty),
-                rol: Number(item.rol),
-                moq: Number(item.moq),
-                eoq: Number(item.eoq),
+                purchasePrice: Number(item.purchasePrice),
+                taxPercent: Number(item.taxPercent || 0),
                 status: Number(item.currentQty) <= Number(item.rol) ? 'Low Stock' : 'In Stock',
                 supplier: item.supplier?.supplierName,
                 category: item.type?.typeName

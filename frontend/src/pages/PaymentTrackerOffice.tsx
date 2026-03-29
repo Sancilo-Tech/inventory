@@ -246,7 +246,7 @@ const PaymentTrackerOffice: React.FC = () => {
       setEditingAutoInvoice(invoice);
       setAutoFormData({
         invoice_name: invoice.invoiceName,
-        amount: invoice.amount.toString(),
+        amount: (parseFloat(invoice.amount)+parseFloat(invoice.taxAmount)).toString(),
         frequency: invoice.frequency || "monthly",
         due_date: invoice.dueDate || 0,
         notes: invoice.notes || "",
@@ -402,7 +402,7 @@ const PaymentTrackerOffice: React.FC = () => {
         invoice_number: invoice.invoiceNumber,
         invoice_name: invoice.invoiceName,
         supplier_id: invoice.supplierId || "",
-        amount: invoice.amount.toString(),
+        amount: (parseFloat(invoice.amount)+parseFloat(invoice.taxAmount)).toString(),
         tax_id: invoice.taxId || "",
         invoice_date: new Date(invoice.invoiceDate).toISOString().split("T")[0],
         due_date: new Date(invoice.dueDate).toISOString().split("T")[0],
@@ -695,8 +695,8 @@ const PaymentTrackerOffice: React.FC = () => {
                   {Object.entries(taxGroups).sort(([a], [b]) => parseFloat(a) - parseFloat(b)).map(([pct, vals]) => (
                     <div key={pct} className="flex flex-col bg-gray-50 rounded-lg px-3 py-1">
                       <span className="text-xs text-gray-500 uppercase">Tax {pct} Group</span>
-                      <span className="text-sm font-bold text-gray-800">Total: €{vals.total.toFixed(2)}</span>
-                      <span className="text-xs text-gray-500">Base: €{vals.amount.toFixed(2)} · Tax: €{vals.tax.toFixed(2)}</span>
+                      <span className="text-sm text-gray-800">Total: €{vals.total.toFixed(2)}</span>
+                      <span className="text-xs text-gray-500">Base: €{vals.amount.toFixed(2)} · Tax: <span className="font-bold text-orange-600 text-base bg-orange-50 px-1 rounded">€{vals.tax.toFixed(2)}</span></span>
                     </div>
                   ))}
                 </div>

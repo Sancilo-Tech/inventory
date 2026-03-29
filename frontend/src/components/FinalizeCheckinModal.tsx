@@ -105,6 +105,7 @@ const FinalizeCheckinModal: React.FC<Props> = ({ scannedItems, onSuccess, onCanc
       const msg = err.response?.data?.message || 'Failed to finalize check-in';
       if (err.response?.status === 409) {
         setErrors(prev => ({ ...prev, invoiceNumber: msg }));
+        toast.error(msg);
       } else {
         toast.error(msg);
       }

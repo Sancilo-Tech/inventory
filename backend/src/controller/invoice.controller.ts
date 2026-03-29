@@ -423,9 +423,13 @@ static async autoInvoice(req: any, res: Response, next: NextFunction) {
 
             // Duplicate check: same invoice_number + supplier + checkin type
             const duplicate = await prisma.invoice.findFirst({
-                where: { invoiceNumber: invoice_number.trim(), supplierId: supplier_id, invoiceType: 'checkin' }
+                where: {
+                    invoiceNumber: invoice_number.trim(),
+                    supplierId: supplier_id,
+                    invoiceType: 'checkin'
+                }
             });
-            if (duplicate) { res.status(409).json({ message: `Invoice ${invoice_number} already exists for this supplier` }); return; }
+            if (duplicate) { next({ message: 'Invoice exist already exists' }); return; }
 
             const result = await prisma.$transaction(async (tx) => {
                 let totalQty = 0;
@@ -502,6 +506,7 @@ static async autoInvoice(req: any, res: Response, next: NextFunction) {
                             transactionType: 'checkin',
                             quantity: it.quantity,
                             quantityType: it.quantityType as any,
+                            price: it.rate,
                             remainingQty: newQty,
                             takenById: userId,
                             remarks: `invoice:${invoice.invoiceId}`,
@@ -552,10 +557,10 @@ static async autoInvoice(req: any, res: Response, next: NextFunction) {
                     itemName: t.item.itemName,
                     itemCode: t.item.itemCode,
                     quantity: Number(t.quantity),
-                    rate: Number(t.item.purchasePrice),
+                    rate: Number(t.price),
                     taxPercent: Number(t.item.taxPercent ?? 0),
-                    taxAmount: parseFloat(((Number(t.item.purchasePrice) * Number(t.item.taxPercent ?? 0)) / 100).toFixed(2)),
-                    totalAmount: parseFloat((Number(t.item.purchasePrice) * (1 + Number(t.item.taxPercent ?? 0) / 100) * Number(t.quantity)).toFixed(2)),
+                    taxAmount: parseFloat(((Number(t.price) * Number(t.item.taxPercent ?? 0)) / 100).toFixed(2)),
+                    totalAmount: parseFloat((Number(t.price) * (1 + Number(t.item.taxPercent ?? 0) / 100) * Number(t.quantity)).toFixed(2)),
                 }));
 
                 return {

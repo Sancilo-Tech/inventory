@@ -41,7 +41,6 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setSelectedLocationState(location);
     if (location && storageKey) {
       localStorage.setItem(storageKey, JSON.stringify(location));
-      window.location.reload();
     } else if (storageKey) {
       localStorage.removeItem(storageKey);
     }

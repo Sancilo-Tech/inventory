@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Truck, Plus, Edit2, Trash2, X, Eye } from 'lucide-react';
+import { Truck, Plus, Edit2, Trash2, X, Eye, Search, Upload } from 'lucide-react';
 import { supplierAPI } from '../services/api';
 import { useLoading } from '../context/LoadingContext';
 import { toast } from 'react-toastify';
+import SimpleBulkUploadModal from '../components/SimpleBulkUploadModal';
+import { parseSupplierFile, downloadSupplierTemplate } from '../utils/excelParser';
 
 interface Supplier {
   supplierId: string;
   supplierName: string;
   contactPerson?: string;
   email?: string;
+  secondaryEmail?: string;
   phone?: string;
+  SecondaryPhone?: string;
   address?: string;
   vatId?: string;
   taxId?: string;
@@ -21,8 +25,21 @@ const Suppliers: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewingSupplier, setViewingSupplier] = useState<Supplier | null>(null);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
-  const [formData, setFormData] = useState({ supplierName: '', contactPerson: '', email: '', phone: '', address: '', vatId: '', taxId: '', ibanNumber: '' });
+  const [formData, setFormData] = useState({ supplierName: '', contactPerson: '', email: '', secondaryEmail: '', phone: '', SecondaryPhone: '', address: '', vatId: '', taxId: '', ibanNumber: '' });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const { showLoading, hideLoading } = useLoading();
+
+  const filteredSuppliers = suppliers
+    .filter((s) => {
+      const q = searchQuery.toLowerCase();
+      return (
+        s.supplierName.toLowerCase().includes(q) ||
+        (s.email?.toLowerCase().includes(q) ?? false) ||
+        (s.secondaryEmail?.toLowerCase().includes(q) ?? false)
+      );
+    })
+    .sort((a, b) => a.supplierName.localeCompare(b.supplierName));
 
   useEffect(() => {
     fetchSuppliers();
@@ -48,7 +65,7 @@ const Suppliers: React.FC = () => {
         await supplierAPI.createSupplier(formData);
         toast.success('Supplier created successfully');
       }
-      fetchSuppliers();
+      await fetchSuppliers();
       closeModal();
     } catch (error) {
       console.error('Error saving supplier:', error);
@@ -63,7 +80,7 @@ const Suppliers: React.FC = () => {
       showLoading('Deleting supplier...');
       try {
         await supplierAPI.deleteSupplier(id);
-        fetchSuppliers();
+        await fetchSuppliers();
         toast.success('Supplier deleted successfully');
       } catch (error) {
         console.error('Error deleting supplier:', error);
@@ -81,7 +98,9 @@ const Suppliers: React.FC = () => {
         supplierName: supplier.supplierName, 
         contactPerson: supplier.contactPerson || '', 
         email: supplier.email || '', 
+        secondaryEmail: supplier.secondaryEmail || '',
         phone: supplier.phone || '', 
+        SecondaryPhone: supplier.SecondaryPhone || '',
         address: supplier.address || '',
         vatId: supplier.vatId || '',
         taxId: supplier.taxId || '',
@@ -89,7 +108,7 @@ const Suppliers: React.FC = () => {
       });
     } else {
       setEditingSupplier(null);
-      setFormData({ supplierName: '', contactPerson: '', email: '', phone: '', address: '', vatId: '', taxId: '', ibanNumber: '' });
+      setFormData({ supplierName: '', contactPerson: '', email: '', secondaryEmail: '', phone: '', SecondaryPhone: '', address: '', vatId: '', taxId: '', ibanNumber: '' });
     }
     setIsModalOpen(true);
   };
@@ -97,17 +116,33 @@ const Suppliers: React.FC = () => {
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingSupplier(null);
-    setFormData({ supplierName: '', contactPerson: '', email: '', phone: '', address: '', vatId: '', taxId: '', ibanNumber: '' });
+    setFormData({ supplierName: '', contactPerson: '', email: '', secondaryEmail: '', phone: '', SecondaryPhone: '', address: '', vatId: '', taxId: '', ibanNumber: '' });
   };
 
   return (
     <div className="">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Suppliers</h1>
-        <button onClick={() => openModal()} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
-          <Plus size={20} />
-          <span>Add Supplier</span>
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setIsBulkModalOpen(true)} className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+            <Upload size={20} />
+            <span>Bulk Upload</span>
+          </button>
+          <button onClick={() => openModal()} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+            <Plus size={20} />
+            <span>Add Supplier</span>
+          </button>
+        </div>
+      </div>
+      <div className="relative my-4">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Search by name or email..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+        />
       </div>
       
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
@@ -131,7 +166,9 @@ const Suppliers: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {suppliers.map((supplier) => (
+                {filteredSuppliers.length === 0 ? (
+                  <tr><td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-500">No suppliers match your search.</td></tr>
+                ) : filteredSuppliers.map((supplier) => (
                   <tr key={supplier.supplierId} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{supplier.supplierName}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">{supplier.contactPerson || '-'}</td>
@@ -182,8 +219,16 @@ const Suppliers: React.FC = () => {
                 <p className="text-gray-900">{viewingSupplier.email || '-'}</p>
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">Secondary Email</label>
+                <p className="text-gray-900">{viewingSupplier.secondaryEmail || '-'}</p>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-500 mb-1">Phone</label>
                 <p className="text-gray-900">{viewingSupplier.phone || '-'}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">Secondary Phone</label>
+                <p className="text-gray-900">{viewingSupplier.SecondaryPhone || '-'}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-500 mb-1">Address</label>
@@ -230,8 +275,16 @@ const Suppliers: React.FC = () => {
                   <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Secondary Email</label>
+                  <input type="email" value={formData.secondaryEmail} onChange={(e) => setFormData({ ...formData, secondaryEmail: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
                   <input type="tel" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Secondary Phone</label>
+                  <input type="tel" value={formData.SecondaryPhone} onChange={(e) => setFormData({ ...formData, SecondaryPhone: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">VAT ID</label>
@@ -263,6 +316,22 @@ const Suppliers: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+      {isBulkModalOpen && (
+        <SimpleBulkUploadModal
+          title="Bulk Upload Suppliers"
+          previewColumns={[
+            { key: 'supplierName', label: 'Supplier Name' },
+            { key: 'email', label: 'Email' },
+            { key: 'phone', label: 'Phone' },
+            { key: 'contactPerson', label: 'Contact Person' },
+          ]}
+          onClose={() => setIsBulkModalOpen(false)}
+          onSuccess={() => { setIsBulkModalOpen(false); fetchSuppliers(); }}
+          parseFile={parseSupplierFile}
+          uploadData={(rows) => supplierAPI.bulkUpload(rows)}
+          downloadTemplate={downloadSupplierTemplate}
+        />
       )}
     </div>
   );

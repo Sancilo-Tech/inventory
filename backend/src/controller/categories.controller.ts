@@ -81,4 +81,34 @@ export class categoriesController {
             next(error)
         }
     }
+
+    static async bulkUpload(req: Request, res: Response, next: NextFunction) {
+        try {
+            const rows: any[] = req.body.categories;
+            if (!Array.isArray(rows) || rows.length === 0) {
+                res.status(400).json({ message: 'No data provided' });
+                return;
+            }
+            const successList: any[] = [];
+            const failed: { row: number; error: string }[] = [];
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                try {
+                    const category = await prisma.typeMaster.create({
+                        data: {
+                            typeName: row.typeName,
+                            description: row.description || undefined,
+                            type: row.type || 'item',
+                        }
+                    });
+                    successList.push(category);
+                } catch (err: any) {
+                    failed.push({ row: i + 2, error: err?.message || 'Unknown error' });
+                }
+            }
+            res.json({ successCount: successList.length, failed });
+        } catch (error) {
+            next(error);
+        }
+    }
 }

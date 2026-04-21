@@ -59,19 +59,23 @@ const UsersPage: React.FC = () => {
   const { showLoading, hideLoading } = useLoading();
 
   useEffect(() => {
-    fetchUsers();
-    fetchLocations();
+    const loadAll = async () => {
+      showLoading('Loading users...');
+      try {
+        await Promise.all([fetchUsers(), fetchLocations()]);
+      } finally {
+        hideLoading();
+      }
+    };
+    loadAll();
   }, []);
 
   const fetchUsers = async () => {
     try {
-      showLoading("")
       const response = await userAPI.getUsers();
       setUsers(response.data);
     } catch (error) {
       console.error("Error fetching users:", error);
-    }finally{
-      hideLoading()
     }
   };
 
@@ -91,7 +95,7 @@ const UsersPage: React.FC = () => {
       if (editingUser) {
         await userAPI.updateUser(editingUser.userId, formData);
       }
-      fetchUsers();
+      await fetchUsers();
       closeModal();
     } catch (error) {
       console.error("Error saving user:", error);
@@ -106,20 +110,13 @@ const UsersPage: React.FC = () => {
     try {
       const response = await authAPI.createUser(addFormData);
       setTempPassword(response.data.tempPassword);
-      fetchUsers();
-      setAddFormData({
-        full_name: "",
-        email: "",
-        phone: "",
-        role: "staff",
-        location_ids: [],
-      });
-      setIsAddModalOpen(false)
+      await fetchUsers();
+      setAddFormData({ full_name: "", email: "", phone: "", role: "staff", location_ids: [] });
+      setIsAddModalOpen(false);
       toast.success("Create Successfully...");
-
     } catch (error) {
       console.error("Error creating user:", error);
-      toast.error("failed to create a user")
+      toast.error("failed to create a user");
     } finally {
       hideLoading();
     }
@@ -130,7 +127,7 @@ const UsersPage: React.FC = () => {
       showLoading("Deleting user...");
       try {
         await userAPI.deleteUser(id);
-        fetchUsers();
+        await fetchUsers();
         toast.success("Deleted Successfully");
       } catch (error) {
         console.error("Error deleting user:", error);

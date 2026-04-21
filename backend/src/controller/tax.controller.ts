@@ -71,4 +71,34 @@ export class TaxController{
             next(error)
         }
     }
+
+    static async bulkUpload(req:Request, res:Response, next:NextFunction){
+        try{
+            const rows: any[] = req.body.taxes;
+            if (!Array.isArray(rows) || rows.length === 0) {
+                res.status(400).json({ message: 'No data provided' });
+                return;
+            }
+            const successList: any[] = [];
+            const failed: { row: number; error: string }[] = [];
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                try {
+                    const tax = await prisma.taxMaster.create({
+                        data: {
+                            tax_name: row.tax_name,
+                            taxPercentage: row.taxPercentage,
+                            description: row.description || undefined,
+                        }
+                    });
+                    successList.push(tax);
+                } catch (err: any) {
+                    failed.push({ row: i + 2, error: err?.message || 'Unknown error' });
+                }
+            }
+            res.json({ successCount: successList.length, failed });
+        }catch(error){
+            next(error)
+        }
+    }
 }

@@ -8,5 +8,6 @@ route.get("/all", asyncHandler(TaxController.getAllTax));
 route.get("/get-by-id/:taxId", asyncHandler(TaxController.getTaxById));
 route.put("/update/:taxId", asyncHandler(TaxController.updateTax));
 route.delete("/delete/:taxId", asyncHandler(TaxController.deleteTax));
+route.post("/bulk-upload", asyncHandler(TaxController.bulkUpload));
 
 export default route;

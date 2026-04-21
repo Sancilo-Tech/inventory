@@ -13,4 +13,5 @@ route.get("/all", asyncHandler(SupplierController.getAllSuppliers));
 route.get("/:supplierId", asyncHandler(SupplierController.getSupplierById));
 route.put("/update/:supplierId", asyncHandler(SupplierController.updateSupplier));
 route.delete("/delete/:supplierId", asyncHandler(SupplierController.deleteSupplier));
+route.post("/bulk-upload", asyncHandler(SupplierController.bulkUpload));
 export default route;

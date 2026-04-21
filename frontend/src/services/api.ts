@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import axios from 'axios';
 
-// const API_BASE_URL = 'http://localhost:5000/api';
-const API_BASE_URL = 'https://inventory-qj08.onrender.com/api';
+const API_BASE_URL = 'http://localhost:5000/api';
+// const API_BASE_URL = 'https://inventory-qj08.onrender.com/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -88,6 +88,7 @@ export const supplierAPI = {
   createSupplier: (data: any) => api.post('/supplier/create', data),
   updateSupplier: (supplierId: string, data: any) => api.put(`/supplier/update/${supplierId}`, data),
   deleteSupplier: (supplierId: string) => api.delete(`/supplier/delete/${supplierId}`),
+  bulkUpload: (suppliers: any[]) => api.post('/supplier/bulk-upload', { suppliers }),
 };
 
 export const taxAPI = {
@@ -96,6 +97,7 @@ export const taxAPI = {
   createTax: (data: any) => api.post('/tax/create', data),
   updateTax: (taxId: string, data: any) => api.put(`/tax/update/${taxId}`, data),
   deleteTax: (taxId: string) => api.delete(`/tax/delete/${taxId}`),
+  bulkUpload: (taxes: any[]) => api.post('/tax/bulk-upload', { taxes }),
 };
 
 export const itemAPI = {
@@ -118,6 +120,7 @@ export const categoriesAPI = {
   createCategory: (data: any) => api.post('/categories/create', data),
   updateCategory: (categoriesId: string, data: any) => api.put(`/categories/update/${categoriesId}`, data),
   deleteCategory: (categoriesId: string) => api.delete(`/categories/delete/${categoriesId}`),
+  bulkUpload: (categories: any[]) => api.post('/categories/bulk-upload', { categories }),
 };
 
 export const productAPI = {

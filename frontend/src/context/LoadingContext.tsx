@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useContext, useState, type ReactNode } from 'react';
+import React, { createContext, useContext, useRef, useState, type ReactNode } from 'react';
 import Loading from '../components/Loading';
 
 interface LoadingContextType {
@@ -12,14 +12,19 @@ const LoadingContext = createContext<LoadingContextType | undefined>(undefined);
 export const LoadingProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('Loading...');
+  const counter = useRef(0);
 
   const showLoading = (msg = 'Loading...') => {
+    counter.current += 1;
     setMessage(msg);
     setIsLoading(true);
   };
 
   const hideLoading = () => {
-    setIsLoading(false);
+    counter.current = Math.max(0, counter.current - 1);
+    if (counter.current === 0) {
+      setIsLoading(false);
+    }
   };
 
   return (

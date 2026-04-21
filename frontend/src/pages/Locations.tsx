@@ -27,28 +27,24 @@ const Locations: React.FC = () => {
   }, []);
 
   const fetchLocations = async () => {
-    showLoading("");
     try {
       const response = await locationAPI.getAllLocation();
       setLocations(response.data.data || response.data);
     } catch (error) {
       console.error('Error fetching locations:', error);
     }
-    finally{
-      hideLoading();
-    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    showLoading("")
+    showLoading(editingLocation ? 'Updating location...' : 'Creating location...')
     try {
       if (editingLocation) {
         await locationAPI.updateLocation(editingLocation.locationId, formData);
       } else {
         await locationAPI.createLocation(formData);
       }
-      fetchLocations();
+      await fetchLocations();
       closeModal();
     } catch (error) {
       console.error('Error saving location:', error);
@@ -60,11 +56,10 @@ const Locations: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this location?')) {
-      showLoading("Deleting Location")
+      showLoading('Deleting Location')
       try {
-
         await locationAPI.deleteLocation(id);
-        fetchLocations();
+        await fetchLocations();
       } catch (error) {
         console.error('Error deleting location:', error);
       }

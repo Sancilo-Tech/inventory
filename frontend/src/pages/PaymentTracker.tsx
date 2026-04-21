@@ -42,11 +42,15 @@ const PaymentTracker: React.FC = () => {
   const { showLoading, hideLoading } = useLoading();
 
   useEffect(() => {
-    fetchInvoices();
-    fetchSuppliers();
-    fetchUpcomingAlerts();
-    fetchTaxes();
-    fetchPayment();
+    const loadAll = async () => {
+      showLoading('Loading...');
+      try {
+        await Promise.all([fetchInvoices(), fetchSuppliers(), fetchUpcomingAlerts(), fetchTaxes(), fetchPayment()]);
+      } finally {
+        hideLoading();
+      }
+    };
+    loadAll();
   }, [filter, dateFilter, customStartDate, customEndDate]);
 
   const fetchTaxes = async () => {
@@ -59,7 +63,6 @@ const PaymentTracker: React.FC = () => {
   };
 
   const fetchInvoices = async () => {
-    showLoading('Loading invoices...');
     try {
       const params: any = { type: "purchase" };
       if (filter === 'due_soon') {
@@ -133,8 +136,6 @@ const PaymentTracker: React.FC = () => {
       setInvoices(filteredInvoices);
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to load invoices');
-    } finally {
-      hideLoading();
     }
   };
 

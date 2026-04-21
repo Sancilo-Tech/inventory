@@ -198,3 +198,133 @@ export function downloadErrorReport(rows: ParsedRow[]): void {
   XLSX.utils.book_append_sheet(wb, ws, 'Errors');
   XLSX.writeFile(wb, 'bulk_upload_errors.xlsx');
 }
+
+// ─── Supplier Bulk ───────────────────────────────────────────────
+export interface ParsedSimpleRow {
+  rowIndex: number;
+  data: Record<string, any>;
+  errors: string[];
+  isValid: boolean;
+}
+
+export interface SimpleParseResult {
+  rows: ParsedSimpleRow[];
+  validCount: number;
+  invalidCount: number;
+}
+
+function parseSimple(
+  file: File,
+  requiredCols: string[],
+  transform: (raw: Record<string, unknown>, errors: string[]) => Record<string, any>
+): Promise<SimpleParseResult> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target!.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
+        if (rawRows.length === 0) { reject(new Error('File is empty.')); return; }
+        const headers = Object.keys(rawRows[0]);
+        const missing = requiredCols.filter(c => !headers.includes(c));
+        if (missing.length > 0) { reject(new Error(`Missing columns: ${missing.join(', ')}`)); return; }
+        const rows: ParsedSimpleRow[] = rawRows.map((raw, idx) => {
+          const errors: string[] = [];
+          const rowData = transform(raw, errors);
+          return { rowIndex: idx + 2, data: rowData, errors, isValid: errors.length === 0 };
+        });
+        const validCount = rows.filter(r => r.isValid).length;
+        resolve({ rows, validCount, invalidCount: rows.length - validCount });
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+export function parseSupplierFile(file: File): Promise<SimpleParseResult> {
+  return parseSimple(file, ['supplierName'], (raw, errors) => {
+    const supplierName = String(raw['supplierName'] ?? '').trim();
+    if (!supplierName) errors.push('supplierName is required');
+    return {
+      supplierName,
+      contactPerson: String(raw['contactPerson'] ?? '').trim() || undefined,
+      phone: String(raw['phone'] ?? '').trim() || undefined,
+      SecondaryPhone: String(raw['SecondaryPhone'] ?? '').trim() || undefined,
+      email: String(raw['email'] ?? '').trim() || undefined,
+      secondaryEmail: String(raw['secondaryEmail'] ?? '').trim() || undefined,
+      address: String(raw['address'] ?? '').trim() || undefined,
+      vatId: String(raw['vatId'] ?? '').trim() || undefined,
+      taxId: String(raw['taxId'] ?? '').trim() || undefined,
+      ibanNumber: String(raw['ibanNumber'] ?? '').trim() || undefined,
+    };
+  });
+}
+
+export function downloadSupplierTemplate(): void {
+  const sampleRows = [
+    { supplierName: 'Supplier A', contactPerson: 'Raj', phone: '+1234567890', SecondaryPhone: 'info@supplierb.com', email: 'john@example.com', secondaryEmail: 'test@example.com', address: '123 Main St', vatId: 'VAT001', taxId: 'T179273', ibanNumber: 'GB29NWBK60161331926819' },
+  ];
+  const ws = XLSX.utils.json_to_sheet(sampleRows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Suppliers');
+  XLSX.writeFile(wb, 'bulk_suppliers_template.xlsx');
+}
+
+export function parseCategoryFile(file: File): Promise<SimpleParseResult> {
+  return parseSimple(file, ['typeName', 'type'], (raw, errors) => {
+    const typeName = String(raw['typeName'] ?? '').trim();
+    const type = String(raw['type'] ?? '').trim();
+    const validTypes = ['item', 'financial', 'group', 'quantityType', 'paymentType'];
+    if (!typeName) errors.push('typeName is required');
+    if (!type) errors.push('type is required');
+    else if (!validTypes.includes(type)) errors.push(`type must be one of: ${validTypes.join(', ')}`);
+    return {
+      typeName,
+      type,
+      description: String(raw['description'] ?? '').trim() || undefined,
+    };
+  });
+}
+
+export function downloadCategoryTemplate(): void {
+  const sampleRows = [
+    { typeName: 'Cool drinks', type: 'item', description: 'All drink items' },
+    { typeName: 'Rent', type: 'financial', description: '' },
+    { typeName: 'chilly', type: 'group', description: '' },
+    { typeName: 'bottle', type: 'quantityType', description: 'Weight unit' },
+    { typeName: 'Cash', type: 'paymentType', description: '' },
+  ];
+  const ws = XLSX.utils.json_to_sheet(sampleRows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Categories');
+  XLSX.writeFile(wb, 'bulk_categories_template.xlsx');
+}
+
+export function parseTaxFile(file: File): Promise<SimpleParseResult> {
+  return parseSimple(file, ['tax_name', 'taxPercentage'], (raw, errors) => {
+    const tax_name = String(raw['tax_name'] ?? '').trim();
+    const taxPercentage = Number(raw['taxPercentage']);
+    if (!tax_name) errors.push('tax_name is required');
+    if (isNaN(taxPercentage) || taxPercentage < 0) errors.push('taxPercentage must be a non-negative number');
+    return {
+      tax_name,
+      taxPercentage,
+      description: String(raw['description'] ?? '').trim() || undefined,
+    };
+  });
+}
+
+export function downloadTaxTemplate(): void {
+  const sampleRows = [
+    { tax_name: 'VAT 20%', taxPercentage: 20, description: 'Standard VAT' },
+    { tax_name: 'VAT 5%', taxPercentage: 5, description: 'Reduced VAT' },
+    { tax_name: 'Zero Rate', taxPercentage: 0, description: '' },
+  ];
+  const ws = XLSX.utils.json_to_sheet(sampleRows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Taxes');
+  XLSX.writeFile(wb, 'bulk_taxes_template.xlsx');
+}

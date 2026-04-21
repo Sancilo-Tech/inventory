@@ -4,19 +4,19 @@ import { prisma } from "../lib/prisma";
 export class SupplierController {
     static async createSupplier(req: Request, res: Response, next: NextFunction) {
         try {
-            const { supplierName, address, email, phone, contactPerson,vatId,taxId,ibanNumber } = req.body
+            const { supplierName, address, email, phone, contactPerson, vatId, taxId, ibanNumber, secondaryEmail, SecondaryPhone } = req.body
             const supplier = await prisma.supplierMaster.create({
                 data: {
-                    supplierName: supplierName,
-                    address: address,
-                    contactPerson: contactPerson,
-                    phone: phone,
-                    email: email
-                    ,vatId,
+                    supplierName,
+                    address,
+                    contactPerson,
+                    phone,
+                    email,
+                    vatId,
                     taxId,
-                    ibanNumber 
-
-
+                    ibanNumber,
+                    secondaryEmail,
+                    SecondaryPhone
                 }
             })
             res.json(supplier)
@@ -48,20 +48,22 @@ export class SupplierController {
     static async updateSupplier(req: Request, res: Response, next: NextFunction) {
         try {
             const id = req.params.supplierId
-            const { supplierName, address, email, phone, contactPerson, vatId, taxId, ibanNumber } = req.body
+            const { supplierName, address, email, phone, contactPerson, vatId, taxId, ibanNumber, secondaryEmail, SecondaryPhone } = req.body
             const supplier = await prisma.supplierMaster.update({
                 where: {
                     supplierId: id
                 },
                 data: {
-                    supplierName: supplierName,
-                    address: address,
-                    contactPerson: contactPerson,
-                    phone: phone,
-                    email: email,
+                    supplierName,
+                    address,
+                    contactPerson,
+                    phone,
+                    email,
                     vatId,
                     taxId,
-                    ibanNumber
+                    ibanNumber,
+                    secondaryEmail,
+                    SecondaryPhone
                 }
             });
             res.json(supplier);
@@ -82,5 +84,41 @@ export class SupplierController {
             next(error)
         }
     }
-    
+
+    static async bulkUpload(req: Request, res: Response, next: NextFunction) {
+        try {
+            const rows: any[] = req.body.suppliers;
+            if (!Array.isArray(rows) || rows.length === 0) {
+                res.status(400).json({ message: 'No data provided' });
+                return;
+            }
+            const successList: any[] = [];
+            const failed: { row: number; error: string }[] = [];
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                try {
+                    const supplier = await prisma.supplierMaster.create({
+                        data: {
+                            supplierName: row.supplierName,
+                            contactPerson: row.contactPerson || undefined,
+                            phone: row.phone || undefined,
+                            SecondaryPhone: row.SecondaryPhone || undefined,
+                            email: row.email || undefined,
+                            secondaryEmail: row.secondaryEmail || undefined,
+                            address: row.address || undefined,
+                            vatId: row.vatId || undefined,
+                            taxId: row.taxId || undefined,
+                            ibanNumber: row.ibanNumber || undefined,
+                        }
+                    });
+                    successList.push(supplier);
+                } catch (err: any) {
+                    failed.push({ row: i + 2, error: err?.message || 'Unknown error' });
+                }
+            }
+            res.json({ successCount: successList.length, failed });
+        } catch (error) {
+            next(error);
+        }
+    }
 }

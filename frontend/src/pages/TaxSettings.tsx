@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Calculator, Plus, Edit2, Trash2, X, Eye } from 'lucide-react';
+import { Calculator, Plus, Edit2, Trash2, X, Eye, Search, Upload } from 'lucide-react';
 import { taxAPI } from '../services/api';
 import { useLoading } from '../context/LoadingContext';
 import { toast } from 'react-toastify';
+import SimpleBulkUploadModal from '../components/SimpleBulkUploadModal';
+import { parseTaxFile, downloadTaxTemplate } from '../utils/excelParser';
 
 interface Tax {
   taxId: string;
@@ -17,7 +19,13 @@ const TaxSettings: React.FC = () => {
   const [viewingTax, setViewingTax] = useState<Tax | null>(null);
   const [editingTax, setEditingTax] = useState<Tax | null>(null);
   const [formData, setFormData] = useState({ tax_name: '', taxPercentage: '', description: '' });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const { showLoading, hideLoading } = useLoading();
+
+  const filteredTaxes = taxes
+    .filter((t) => t.tax_name.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => a.tax_name.localeCompare(b.tax_name));
 
   useEffect(() => {
     fetchTaxes();
@@ -44,7 +52,7 @@ const TaxSettings: React.FC = () => {
         await taxAPI.createTax(data);
         toast.success('Tax created successfully');
       }
-      fetchTaxes();
+      await fetchTaxes();
       closeModal();
     } catch (error) {
       console.error('Error saving tax:', error);
@@ -59,7 +67,7 @@ const TaxSettings: React.FC = () => {
       showLoading('Deleting tax...');
       try {
         await taxAPI.deleteTax(id);
-        fetchTaxes();
+        await fetchTaxes();
         toast.success('Tax deleted successfully');
       } catch (error) {
         console.error('Error deleting tax:', error);
@@ -91,10 +99,26 @@ const TaxSettings: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Tax Settings</h1>
-        <button onClick={() => openModal()} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
-          <Plus size={20} />
-          <span>Add Tax Rate</span>
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setIsBulkModalOpen(true)} className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+            <Upload size={20} />
+            <span>Bulk Upload</span>
+          </button>
+          <button onClick={() => openModal()} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+            <Plus size={20} />
+            <span>Add Tax Rate</span>
+          </button>
+        </div>
+      </div>
+      <div className="relative">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Search by tax name..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+        />
       </div>
       
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
@@ -116,7 +140,9 @@ const TaxSettings: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {taxes.map((tax) => (
+                {filteredTaxes.length === 0 ? (
+                  <tr><td colSpan={4} className="px-6 py-8 text-center text-sm text-gray-500">No taxes match your search.</td></tr>
+                ) : filteredTaxes.map((tax) => (
                   <tr key={tax.taxId} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{tax.tax_name}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">{tax.taxPercentage}%</td>
@@ -202,6 +228,21 @@ const TaxSettings: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+      {isBulkModalOpen && (
+        <SimpleBulkUploadModal
+          title="Bulk Upload Taxes"
+          previewColumns={[
+            { key: 'tax_name', label: 'Tax Name' },
+            { key: 'taxPercentage', label: 'Percentage' },
+            { key: 'description', label: 'Description' },
+          ]}
+          onClose={() => setIsBulkModalOpen(false)}
+          onSuccess={() => { setIsBulkModalOpen(false); fetchTaxes(); }}
+          parseFile={parseTaxFile}
+          uploadData={(rows) => taxAPI.bulkUpload(rows)}
+          downloadTemplate={downloadTaxTemplate}
+        />
       )}
     </div>
   );

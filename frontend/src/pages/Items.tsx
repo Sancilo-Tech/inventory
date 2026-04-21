@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Package,
   Plus,
@@ -55,6 +55,61 @@ interface Item {
   tax?: { tax_name: string,taxPercentage:number };
   location?: { locationName: string };
 }
+
+interface SearchableSelectProps {
+  label: string;
+  required?: boolean;
+  value: string;
+  onChange: (val: string) => void;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+  error?: string;
+  className?: string;
+}
+
+const SearchableSelect: React.FC<SearchableSelectProps> = ({ label, required, value, onChange, options, placeholder, error, className }) => {
+  const [search, setSearch] = useState('');
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const filtered = options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()));
+  const selected = options.find(o => o.value === value);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const baseClass = error
+    ? 'w-full px-3 py-2 border border-red-500 rounded-lg focus:ring-2 focus:ring-red-400 bg-red-50 text-left flex justify-between items-center'
+    : 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left flex justify-between items-center';
+
+  return (
+    <div className={className} ref={ref}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">{label}{required && ' *'}</label>
+      <button type="button" onClick={() => { setOpen(o => !o); setSearch(''); }} className={baseClass}>
+        <span className={selected ? 'text-gray-900' : 'text-gray-400'}>{selected ? selected.label : (placeholder || `Select ${label}`)}</span>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg w-full">
+          <div className="p-2 border-b border-gray-100">
+            <input autoFocus type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search..." className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          </div>
+          <ul className="max-h-48 overflow-y-auto">
+            <li onClick={() => { onChange(''); setOpen(false); }} className="px-3 py-2 text-sm text-gray-400 hover:bg-gray-50 cursor-pointer">{placeholder || `Select ${label}`}</li>
+            {filtered.length === 0 ? (
+              <li className="px-3 py-2 text-sm text-gray-400">No results</li>
+            ) : filtered.map(o => (
+              <li key={o.value} onClick={() => { onChange(o.value); setOpen(false); }} className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 ${value === o.value ? 'bg-blue-50 font-medium text-blue-700' : 'text-gray-900'}`}>{o.label}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+    </div>
+  );
+};
 
 const defaultFormData = {
     item_code: "",
@@ -113,11 +168,21 @@ const Items: React.FC = () => {
 
  
   useEffect(() => {
-    fetchItems();
-    fetchSuppliers();
-    fetchCategories();
-    fetchTaxes();
-    fetchLocations();
+    const loadAll = async () => {
+      showLoading('Loading items...');
+      try {
+        await Promise.all([
+          fetchItems(),
+          fetchSuppliers(),
+          fetchCategories(),
+          fetchTaxes(),
+          fetchLocations(),
+        ]);
+      } finally {
+        hideLoading();
+      }
+    };
+    loadAll();
   }, []);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -653,7 +718,7 @@ const Items: React.FC = () => {
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 w-full max-w-5xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">
                 {editingItem ? "Edit Item" : "Add Item"}
@@ -666,172 +731,63 @@ const Items: React.FC = () => {
               </button>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Row 1: Basic Info */}
+              <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Item Code *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.item_code}
-                    onChange={(e) => handleNameInput(e, 'item_code')}
-                    onBlur={handleItemCodeBlur}
-                    className={inputClass('item_code')}
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Item Code *</label>
+                  <input type="text" required value={formData.item_code} onChange={(e) => handleNameInput(e, 'item_code')} onBlur={handleItemCodeBlur} className={inputClass('item_code')} />
                   {errors.item_code && <p className="text-xs text-red-500 mt-1">{errors.item_code}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Item Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.item_name}
-                    onChange={(e) => handleNameInput(e, 'item_name')}
-                    className={inputClass('item_name')}
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Item Name *</label>
+                  <input type="text" required value={formData.item_name} onChange={(e) => handleNameInput(e, 'item_name')} className={inputClass('item_name')} />
                   {errors.item_name && <p className="text-xs text-red-500 mt-1">{errors.item_name}</p>}
                 </div>
-             
-
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Group
-                  </label>
-                  <select
-                    value={formData.groupName}
-                    onChange={(e) =>
-                      setFormData({ ...formData, groupName: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">Select Group</option>
-                    {group.map((group) => (
-                      <option key={group.typeId} value={group.typeId}>
-                        {group.typeName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-               
-
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Current Quantity
-                  </label>
-                  <input
-                    type="number"
-                    step="1"
-                    min="0"
-                    value={formData.current_qty}
-                    onChange={(e) =>
-                      setFormData({ ...formData, current_qty: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Pack Quantity
-                  </label>
-                  <input
-                    type="number"
-                    step="1"
-                    min="0"
-                    value={formData.packQty}
-                    onChange={(e) =>
-                      setFormData({ ...formData, packQty: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                   <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Quantity type*
-                  </label>
-                  <select
-                    required
-                    value={formData.quantityType}
-                    onChange={(e) =>
-                      setFormData({ ...formData, quantityType: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    {qtyType.map((type) => (
-                      <option key={type} value={type.typeName} className=" capitalize">
-                        {type.typeName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Barcode
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Barcode</label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      value={formData.barcode}
-                      onChange={(e) =>
-                        setFormData({ ...formData, barcode: e.target.value })
-                      }
-                      className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    <button
-                      type="button"
-                      onClick={generateRandomBarcode}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-green-600"
-                    >
+                    <input type="text" value={formData.barcode} onChange={(e) => setFormData({ ...formData, barcode: e.target.value })} className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    <button type="button" onClick={generateRandomBarcode} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-green-600">
                       <Shuffle size={18} />
                     </button>
                   </div>
                 </div>
+              </div>
+
+              {/* Row 2: Classification */}
+              <div className="grid grid-cols-3 gap-4">
+                <SearchableSelect
+                  label="Supplier"
+                  required
+                  value={formData.supplier_id}
+                  onChange={(val) => setFormData({ ...formData, supplier_id: val })}
+                  options={suppliers.map(s => ({ value: s.supplierId, label: s.supplierName }))}
+                  error={errors.supplier_id}
+                  className="relative"
+                />
+                <SearchableSelect
+                  label="Category"
+                  required
+                  value={formData.type_id}
+                  onChange={(val) => setFormData({ ...formData, type_id: val })}
+                  options={categories.map(c => ({ value: c.typeId, label: c.typeName }))}
+                  error={errors.type_id}
+                  className="relative"
+                />
+                <SearchableSelect
+                  label="Group"
+                  value={formData.groupName}
+                  onChange={(val) => setFormData({ ...formData, groupName: val })}
+                  options={group.map(g => ({ value: g.typeId, label: g.typeName }))}
+                  className="relative"
+                />
+              </div>
+
+              {/* Row 3: Location, Tax, Price */}
+              <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Supplier
-                  </label>
-                  <select
-                    required
-                    value={formData.supplier_id}
-                    onChange={(e) => setFormData({ ...formData, supplier_id: e.target.value })}
-                    className={inputClass('supplier_id')}
-                  >
-                    <option value="">Select Supplier</option>
-                    {suppliers.map((supplier) => (
-                      <option key={supplier.supplierId} value={supplier.supplierId}>{supplier.supplierName}</option>
-                    ))}
-                  </select>
-                  {errors.supplier_id && <p className="text-xs text-red-500 mt-1">{errors.supplier_id}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Category
-                  </label>
-                  <select
-                    required
-                    value={formData.type_id}
-                    onChange={(e) => setFormData({ ...formData, type_id: e.target.value })}
-                    className={inputClass('type_id')}
-                  >
-                    <option value="">Select Category</option>
-                    {categories.map((category) => (
-                      <option key={category.typeId} value={category.typeId}>{category.typeName}</option>
-                    ))}
-                  </select>
-                  {errors.type_id && <p className="text-xs text-red-500 mt-1">{errors.type_id}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Location
-                  </label>
-                  <select
-                    required
-                    value={formData.location_id}
-                    onChange={(e) => setFormData({ ...formData, location_id: e.target.value })}
-                    className={inputClass('location_id')}
-                  >
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                  <select required value={formData.location_id} onChange={(e) => setFormData({ ...formData, location_id: e.target.value })} className={inputClass('location_id')}>
                     <option value="">Select Location</option>
                     {locations.map((location) => (
                       <option key={location.locationId} value={location.locationId}>{location.locationName} ({location.locationCode})</option>
@@ -839,113 +795,67 @@ const Items: React.FC = () => {
                   </select>
                   {errors.location_id && <p className="text-xs text-red-500 mt-1">{errors.location_id}</p>}
                 </div>
+                <SearchableSelect
+                  label="Tax"
+                  required
+                  value={formData.tax_id}
+                  onChange={(val) => setFormData({ ...formData, tax_id: val })}
+                  options={taxes.map(t => ({ value: t.taxId, label: `${t.tax_name} (${t.taxPercentage}%)` }))}
+                  error={errors.tax_id}
+                  className="relative"
+                />
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tax
-                  </label>
-                  <select
-                    required
-                    value={formData.tax_id}
-                    onChange={(e) => setFormData({ ...formData, tax_id: e.target.value })}
-                    className={inputClass('tax_id')}
-                  >
-                    <option value="">Select Tax</option>
-                    {taxes.map((tax) => (
-                      <option key={tax.taxId} value={tax.taxId}>{tax.tax_name} ({tax.taxPercentage}%)</option>
-                    ))}
-                  </select>
-                  {errors.tax_id && <p className="text-xs text-red-500 mt-1">{errors.tax_id}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Purchase Price *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    required
-                    value={formData.purchase_price}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        purchase_price: e.target.value,
-                      })
-                    }
-                    className={inputClass('purchase_price')}
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Price *</label>
+                  <input type="number" step="0.1" min="0" required value={formData.purchase_price} onChange={(e) => setFormData({ ...formData, purchase_price: e.target.value })} className={inputClass('purchase_price')} />
                   {errors.purchase_price && <p className="text-xs text-red-500 mt-1">{errors.purchase_price}</p>}
                 </div>
+              </div>
 
+              {/* Row 4: Quantity */}
+              <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    ROL
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.rol}
-                    onChange={(e) =>
-                      setFormData({ ...formData, rol: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Current Quantity</label>
+                  <input type="number" step="1" min="0" value={formData.current_qty} onChange={(e) => setFormData({ ...formData, current_qty: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    MOQ
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.moq}
-                    onChange={(e) =>
-                      setFormData({ ...formData, moq: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Pack Quantity</label>
+                  <input type="number" step="1" min="0" value={formData.packQty} onChange={(e) => setFormData({ ...formData, packQty: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    EOQ
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.eoq}
-                    onChange={(e) =>
-                      setFormData({ ...formData, eoq: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Quantity Type *</label>
+                  <select required value={formData.quantityType} onChange={(e) => setFormData({ ...formData, quantityType: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    {qtyType.map((type) => (
+                      <option key={type.typeId} value={type.typeName} className="capitalize">{type.typeName}</option>
+                    ))}
+                  </select>
                 </div>
+              </div>
+
+              {/* Row 5: Check-In/Out & ROL/MOQ/EOQ */}
+              <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Default Check-In
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={formData.defaultIncrease}
-                    onChange={(e) => setFormData({ ...formData, defaultIncrease: e.target.value })}
-                    className={inputClass('defaultIncrease')}
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Default Check-In</label>
+                  <input type="number" min="0" required value={formData.defaultIncrease} onChange={(e) => setFormData({ ...formData, defaultIncrease: e.target.value })} className={inputClass('defaultIncrease')} />
                   {errors.defaultIncrease && <p className="text-xs text-red-500 mt-1">{errors.defaultIncrease}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Default Check-Out
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={formData.defaultDecrease}
-                    onChange={(e) => setFormData({ ...formData, defaultDecrease: e.target.value })}
-                    className={inputClass('defaultDecrease')}
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Default Check-Out</label>
+                  <input type="number" min="0" required value={formData.defaultDecrease} onChange={(e) => setFormData({ ...formData, defaultDecrease: e.target.value })} className={inputClass('defaultDecrease')} />
                   {errors.defaultDecrease && <p className="text-xs text-red-500 mt-1">{errors.defaultDecrease}</p>}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">ROL</label>
+                    <input type="number" min="0" value={formData.rol} onChange={(e) => setFormData({ ...formData, rol: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">MOQ</label>
+                    <input type="number" min="0" value={formData.moq} onChange={(e) => setFormData({ ...formData, moq: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">EOQ</label>
+                    <input type="number" min="0" value={formData.eoq} onChange={(e) => setFormData({ ...formData, eoq: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  </div>
                 </div>
               </div>
               <div className="flex gap-2 justify-end">

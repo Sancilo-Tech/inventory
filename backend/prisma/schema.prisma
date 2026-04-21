@@ -67,7 +67,9 @@ model SupplierMaster {
   supplierName  String           @map("supplier_name") @db.VarChar(150)
   contactPerson String?          @map("contact_person") @db.VarChar(100)
   phone         String?          @db.VarChar(50)
+  SecondaryPhone String?         @map("secondary_phone")@db.VarChar(50)
   email         String?          @db.VarChar(100)
+  secondaryEmail String?         @map("secondary_email")@db.VarChar(100)
   address       String?
   vatId         String?          @map("vat_id") @db.VarChar(50)
   taxId         String?          @map("tax_id") @db.VarChar(50)
@@ -151,6 +153,8 @@ model ItemMaster {
  
 
   @@unique([itemCode, locationId])
+  @@unique([itemName, supplierId])
+  
   @@map("item_master")
 }
 

@@ -39,7 +39,17 @@ const CheckOut: React.FC = () => {
   const { selectedLocation } = useLocation();
   const { showLoading, hideLoading } = useLoading();
 
-  useEffect(() => { fetchTodayStats(); fetchAllItems(); }, []);
+  useEffect(() => {
+    const loadAll = async () => {
+      showLoading('Loading...');
+      try {
+        await Promise.all([fetchTodayStats(), fetchAllItems()]);
+      } finally {
+        hideLoading();
+      }
+    };
+    loadAll();
+  }, []);
 
   const fetchAllItems = async () => {
     try { const res = await itemAPI.getItems(); setAllItems(res.data); } catch { /* silent */ }

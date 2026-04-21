@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Tags, Plus, Edit2, Trash2, X, Eye } from 'lucide-react';
+import { Tags, Plus, Edit2, Trash2, X, Eye, Search, Upload } from 'lucide-react';
 import { categoriesAPI } from '../services/api';
 import { useLoading } from '../context/LoadingContext';
 import { toast } from 'react-toastify';
+import SimpleBulkUploadModal from '../components/SimpleBulkUploadModal';
+import { parseCategoryFile, downloadCategoryTemplate } from '../utils/excelParser';
 
 interface Category {
   typeId: string;
@@ -18,9 +20,16 @@ const Categories: React.FC = () => {
   const [viewingCategory, setViewingCategory] = useState<Category | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [formData, setFormData] = useState({ typeName: '', description: '', type: 'item' as 'item' | 'financial' | 'group' | 'quantityType' | 'paymentType' });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const { showLoading, hideLoading } = useLoading();
 
+  const filteredCategories = categories
+    .filter((c) => c.typeName.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => a.typeName.localeCompare(b.typeName));
+
   useEffect(() => {
+    setSearchQuery('');
     fetchCategories();
   }, [activeTab]);
 
@@ -44,7 +53,7 @@ const Categories: React.FC = () => {
         await categoriesAPI.createCategory(formData);
         toast.success('Category created successfully');
       }
-      fetchCategories();
+      await fetchCategories();
       closeModal();
     } catch (error) {
       console.error('Error saving category:', error);
@@ -59,7 +68,7 @@ const Categories: React.FC = () => {
       showLoading('Deleting category...');
       try {
         await categoriesAPI.deleteCategory(id);
-        fetchCategories();
+        await fetchCategories();
         toast.success('Category deleted successfully');
       } catch (error) {
         console.error('Error deleting category:', error);
@@ -91,10 +100,27 @@ const Categories: React.FC = () => {
     <div className="">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-gray-900">Categories</h1>
-        <button onClick={() => openModal()} className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
-          <Plus size={20} />
-          <span>Add Category</span>
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setIsBulkModalOpen(true)} className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+            <Upload size={20} />
+            <span>Bulk Upload</span>
+          </button>
+          <button onClick={() => openModal()} className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+            <Plus size={20} />
+            <span>Add Category</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="relative mb-4">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Search by name..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+        />
       </div>
 
       <div className="flex gap-2 mb-4">
@@ -168,7 +194,9 @@ const Categories: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {categories.map((category) => (
+                {filteredCategories.length === 0 ? (
+                  <tr><td colSpan={3} className="px-6 py-8 text-center text-sm text-gray-500">No categories match your search.</td></tr>
+                ) : filteredCategories.map((category) => (
                   <tr key={category.typeId} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{category.typeName}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">{category.description || '-'}</td>
@@ -249,6 +277,21 @@ const Categories: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+      {isBulkModalOpen && (
+        <SimpleBulkUploadModal
+          title="Bulk Upload Categories"
+          previewColumns={[
+            { key: 'typeName', label: 'Category Name' },
+            { key: 'type', label: 'Type' },
+            { key: 'description', label: 'Description' },
+          ]}
+          onClose={() => setIsBulkModalOpen(false)}
+          onSuccess={() => { setIsBulkModalOpen(false); fetchCategories(); }}
+          parseFile={parseCategoryFile}
+          uploadData={(rows) => categoriesAPI.bulkUpload(rows)}
+          downloadTemplate={downloadCategoryTemplate}
+        />
       )}
     </div>
   );

@@ -13,4 +13,5 @@ route.get("/get-by-id/:categoriesId", asyncHandler(categoriesController.getCateg
 route.get("/get", asyncHandler(categoriesController.getCategories));
 route.put("/update/:categoriesId", asyncHandler(categoriesController.updateCategories));
 route.delete("/delete/:categoriesId", asyncHandler(categoriesController.deleteCategories));
+route.post("/bulk-upload", asyncHandler(categoriesController.bulkUpload));
 export default route;

@@ -864,9 +864,9 @@ const Reports: React.FC = () => {
                       <tr className="hover:bg-gray-50">
                         <td className="px-6 py-4 text-sm font-medium text-gray-900">{group.groupName}</td>
                         <td className="px-6 py-4 text-sm text-gray-600">{group.variantCount} item(s)</td>
-                        <td className="px-6 py-4 text-sm font-semibold text-gray-900">€{group.avgUnitPrice.toFixed(4)}</td>
-                        <td className="px-6 py-4 text-sm font-semibold text-green-600">€{group.minUnitPrice.toFixed(4)}</td>
-                        <td className="px-6 py-4 text-sm font-semibold text-red-600">€{group.maxUnitPrice.toFixed(4)}</td>
+                        <td className="px-6 py-4 text-sm font-semibold text-gray-900">€{group.avgUnitPrice.toFixed(2)}</td>
+                        <td className="px-6 py-4 text-sm font-semibold text-green-600">€{group.minUnitPrice.toFixed(2)}</td>
+                        <td className="px-6 py-4 text-sm font-semibold text-red-600">€{group.maxUnitPrice.toFixed(2)}</td>
                         <td className="px-6 py-4 text-sm font-semibold">
                           <span className={group.priceRange > 20 ? 'text-red-600' : group.priceRange > 10 ? 'text-orange-600' : 'text-green-600'}>
                             {group.priceRange.toFixed(1)}%
@@ -919,7 +919,7 @@ const Reports: React.FC = () => {
                                     </div>
                                     <div className="flex justify-between border-t pt-1">
                                       <span className="text-gray-500">Unit Price:</span>
-                                      <span className="font-bold text-gray-900">€{item.unitPrice.toFixed(4)}</span>
+                                      <span className="font-bold text-gray-900">€{item.unitPrice.toFixed(2)}</span>
                                     </div>
                                     <div className="flex justify-between">
                                       <span className="text-gray-500">vs Avg:</span>

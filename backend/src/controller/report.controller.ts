@@ -1036,7 +1036,7 @@ export class ReportController {
                 .map(group => {
                     const unitPrices = group.map(item => {
                         const packQty = Number(item.packQty || 1);
-                        return parseFloat((Number(item.purchasePrice) / packQty).toFixed(4));
+                        return parseFloat((Number(item.purchasePrice)).toFixed(2));
                     });
 
                     const avgPrice = unitPrices.reduce((a, b) => a + b, 0) / unitPrices.length;
@@ -1065,9 +1065,9 @@ export class ReportController {
                         groupId: group[0].groupName as string,
                         groupName: group[0].group?.typeName ?? 'Unknown',
                         variantCount: group.length,
-                        avgUnitPrice: parseFloat(avgPrice.toFixed(4)),
-                        minUnitPrice: parseFloat(minPrice.toFixed(4)),
-                        maxUnitPrice: parseFloat(maxPrice.toFixed(4)),
+                        avgUnitPrice: parseFloat(avgPrice.toFixed(2)),
+                        minUnitPrice: parseFloat(minPrice.toFixed(2)),
+                        maxUnitPrice: parseFloat(maxPrice.toFixed(2)),
                         priceRange: parseFloat(priceRange.toFixed(2)),
                         items: itemsWithPrices,
                     };

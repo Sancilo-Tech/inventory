@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import axios from 'axios';
 
-// const API_BASE_URL = 'http://localhost:5000/api';
-const API_BASE_URL = 'https://inventory-qj08.onrender.com/api';
+const API_BASE_URL = 'http://localhost:5000/api';
+//const API_BASE_URL = 'https://inventory-qj08.onrender.com/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -140,6 +140,7 @@ export const reportAPI = {
   getSupplierPriceAnalysis: () => api.get('/report/supplier-price-analysis'),
   getStockReport: (params?: any) => api.get('/report/stock-report', { params }),
   getGroupedProducts: () => api.get('/report/grouped-products'),
+  getGroupPriceComparison: () => api.get('/report/group-price-comparison'),
   getItemPriceHistory: (itemId: string) => api.get(`/item/price-history/${itemId}`),
   getAllItemPrices: () => api.get('/item/all-prices'),
   getItemPriceStats: (itemId: string) => api.get(`/item/price-stats/${itemId}`),

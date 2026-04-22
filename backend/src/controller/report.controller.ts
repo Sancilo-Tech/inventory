@@ -1010,6 +1010,76 @@ export class ReportController {
         }
     }
 
+    static async getGroupPriceComparison(req: any, res: Response, next: NextFunction) {
+        try {
+            const locationId = req.headers.location_id;
+            if (!locationId) {
+                res.status(400).json({ message: 'Location ID required' });
+                return;
+            }
+
+            const items = await prisma.itemMaster.findMany({
+                where: { locationId, groupName: { not: null }, isDisable: false },
+                include: { group: true, supplier: true, type: true }
+            });
+
+            // Group by groupName (UUID)
+            const grouped: Record<string, typeof items> = {};
+            items.forEach(item => {
+                const key = item.groupName as string;
+                if (!grouped[key]) grouped[key] = [];
+                grouped[key].push(item);
+            });
+
+            const result = Object.values(grouped)
+                .filter(group => group.length > 1)  // skip single-item groups
+                .map(group => {
+                    const unitPrices = group.map(item => {
+                        const packQty = Number(item.packQty || 1);
+                        return parseFloat((Number(item.purchasePrice) / packQty).toFixed(4));
+                    });
+
+                    const avgPrice = unitPrices.reduce((a, b) => a + b, 0) / unitPrices.length;
+                    const minPrice = Math.min(...unitPrices);
+                    const maxPrice = Math.max(...unitPrices);
+                    const priceRange = avgPrice > 0 ? ((maxPrice - minPrice) / avgPrice * 100) : 0;
+
+                    const itemsWithPrices = group.map((item, idx) => {
+                        const unitPrice = unitPrices[idx];
+                        const diffPct = avgPrice > 0 ? ((unitPrice - avgPrice) / avgPrice * 100) : 0;
+                        return {
+                            itemId: item.itemId,
+                            itemCode: item.itemCode,
+                            itemName: item.itemName,
+                            packQty: Number(item.packQty || 1),
+                            purchasePrice: Number(item.purchasePrice),
+                            unitPrice,
+                            supplier: item.supplier?.supplierName ?? '-',
+                            category: item.type?.typeName ?? '-',
+                            priceDiffPercent: parseFloat(diffPct.toFixed(2)),
+                            priceStatus: diffPct > 10 ? 'high' : diffPct < -10 ? 'low' : 'average',
+                        };
+                    }).sort((a, b) => a.unitPrice - b.unitPrice);
+
+                    return {
+                        groupId: group[0].groupName as string,
+                        groupName: group[0].group?.typeName ?? 'Unknown',
+                        variantCount: group.length,
+                        avgUnitPrice: parseFloat(avgPrice.toFixed(4)),
+                        minUnitPrice: parseFloat(minPrice.toFixed(4)),
+                        maxUnitPrice: parseFloat(maxPrice.toFixed(4)),
+                        priceRange: parseFloat(priceRange.toFixed(2)),
+                        items: itemsWithPrices,
+                    };
+                })
+                .sort((a, b) => b.priceRange - a.priceRange);
+
+            res.status(200).json(result);
+        } catch (err) {
+            next(err);
+        }
+    }
+
     static async getPriceChangeReport(req: any, res: Response, next: NextFunction) {
         try {
             const { startDate, endDate, itemId } = req.query;

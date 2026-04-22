@@ -215,73 +215,11 @@ const Reports: React.FC = () => {
     }
   };
 
-  const extractBaseName = (itemName: string): string => {
-    const normalized = itemName.toLowerCase().trim();
-    const baseName = normalized
-      .replace(/[-_\s]*(\d+\.?\d*)\s*(g|kg|ml|l|gram|kilogram|liter|litre|milliliter|millilitre)\s*$/i, '')
-      .replace(/[-_\s]*(\d+\.?\d*)\s*(g|kg|ml|l|gram|kilogram|liter|litre|milliliter|millilitre)[-_\s]*/gi, '')
-      .trim();
-    return baseName;
-  };
-
   const fetchPriceComparison = async () => {
     showLoading('Loading price comparison...');
     try {
-      const response = await reportAPI.getItemAnalysis();
-      const items = response.data;
-
-      const grouped: { [key: string]: any[] } = {};
-
-      items.forEach((item: any) => {
-        const baseName = extractBaseName(item.itemName);
-        if (!grouped[baseName]) {
-          grouped[baseName] = [];
-        }
-        grouped[baseName].push(item);
-      });
-
-      const groupedData: any[] = [];
-
-      Object.entries(grouped).forEach(([baseName, itemList]) => {
-        if (itemList.length > 1) {
-          const prices = itemList.map((i) => {
-            const price = parseFloat(i.purchasePrice || 0);
-            const tax = parseFloat(i.taxPercent || 0);
-            return price + (price * tax / 100);
-          });
-          const minPrice = Math.min(...prices);
-          const maxPrice = Math.max(...prices);
-          const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
-
-          const itemsWithPrices = itemList.map((item: any, index: number) => {
-            const itemPrice = prices[index];
-            const priceDiff = avgPrice > 0 ? ((itemPrice - avgPrice) / avgPrice * 100).toFixed(1) : '0.0';
-
-            return {
-              itemCode: item.itemCode,
-              itemName: item.itemName,
-              category: item.category,
-              supplier: item.supplier,
-              pricePerPack: itemPrice,
-              priceDiffPercent: priceDiff,
-              priceStatus: itemPrice > avgPrice * 1.1 ? 'high' : itemPrice < avgPrice * 0.9 ? 'low' : 'average'
-            };
-          });
-
-          groupedData.push({
-            baseName: baseName,
-            variantCount: itemList.length,
-            avgPrice: avgPrice.toFixed(2),
-            minPrice: minPrice.toFixed(2),
-            maxPrice: maxPrice.toFixed(2),
-            priceRange: ((maxPrice - minPrice) / avgPrice * 100).toFixed(1),
-            items: itemsWithPrices.sort((a, b) => a.pricePerPack - b.pricePerPack)
-          });
-        }
-      });
-
-      const sortedGroups = groupedData.sort((a, b) => parseFloat(b.priceRange) - parseFloat(a.priceRange));
-      setPriceComparison(sortedGroups);
+      const response = await reportAPI.getGroupPriceComparison();
+      setPriceComparison(response.data);
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to load');
     } finally {
@@ -895,18 +833,18 @@ const Reports: React.FC = () => {
       {activeTab === 'price' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100">
           <div className="p-6 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900">Price Comparison Report - Grouped by Similar Products</h3>
-            <p className="text-sm text-gray-600 mt-1">Items grouped by similar names to easily compare pricing variations</p>
+            <h3 className="text-lg font-semibold text-gray-900">Price Comparison by Group</h3>
+            <p className="text-sm text-gray-600 mt-1">Items grouped by product group. </p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product Group</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Variants</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Avg Price</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Min Price</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Max Price</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Group Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Avg Unit Price</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Min Unit Price</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Max Unit Price</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price Range %</th>
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
@@ -917,109 +855,89 @@ const Reports: React.FC = () => {
                     <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
                       <DollarSign className="w-12 h-12 mx-auto mb-2 text-gray-300" />
                       <p>No price comparison data available</p>
-                      <p className="text-xs mt-1">Add multiple items with similar names to see price comparisons</p>
+                      <p className="text-xs mt-1">Assign items to a group with 2+ members to see comparisons</p>
                     </td>
                   </tr>
                 ) : (
-                  priceComparison.map((group: any, idx: number) => (
-                    <React.Fragment key={idx}>
+                  priceComparison.map((group: any) => (
+                    <React.Fragment key={group.groupId}>
                       <tr className="hover:bg-gray-50">
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900 capitalize">{group.baseName}</td>
-                        <td className="px-6 py-4 text-sm text-gray-600">{group.variantCount} variant(s)</td>
-                        <td className="px-6 py-4 text-sm text-gray-900 font-semibold">€{group.avgPrice}</td>
-                        <td className="px-6 py-4 text-sm text-green-600 font-semibold">€{group.minPrice}</td>
-                        <td className="px-6 py-4 text-sm text-red-600 font-semibold">€{group.maxPrice}</td>
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{group.groupName}</td>
+                        <td className="px-6 py-4 text-sm text-gray-600">{group.variantCount} item(s)</td>
+                        <td className="px-6 py-4 text-sm font-semibold text-gray-900">€{group.avgUnitPrice.toFixed(4)}</td>
+                        <td className="px-6 py-4 text-sm font-semibold text-green-600">€{group.minUnitPrice.toFixed(4)}</td>
+                        <td className="px-6 py-4 text-sm font-semibold text-red-600">€{group.maxUnitPrice.toFixed(4)}</td>
                         <td className="px-6 py-4 text-sm font-semibold">
-                          <span className={parseFloat(group.priceRange) > 20 ? 'text-red-600' : parseFloat(group.priceRange) > 10 ? 'text-orange-600' : 'text-green-600'}>
-                            {group.priceRange}%
+                          <span className={group.priceRange > 20 ? 'text-red-600' : group.priceRange > 10 ? 'text-orange-600' : 'text-green-600'}>
+                            {group.priceRange.toFixed(1)}%
                           </span>
                         </td>
                         <td className="px-6 py-4 text-center">
                           <button
                             onClick={() => {
-                              setExpandedPriceGroups((prev) => {
-                                const newSet = new Set(prev);
-                                if (newSet.has(group.baseName)) {
-                                  newSet.delete(group.baseName);
-                                } else {
-                                  newSet.add(group.baseName);
-                                }
-                                return newSet;
+                              setExpandedPriceGroups(prev => {
+                                const next = new Set(prev);
+                                next.has(group.groupId) ? next.delete(group.groupId) : next.add(group.groupId);
+                                return next;
                               });
                             }}
                             className="text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
                           >
-                            {expandedPriceGroups.has(group.baseName) ? (
-                              <>
-                                <ChevronUp size={16} />
-                                <span className="text-xs">Hide</span>
-                              </>
-                            ) : (
-                              <>
-                                <ChevronDown size={16} />
-                                <span className="text-xs">Compare</span>
-                              </>
-                            )}
+                            {expandedPriceGroups.has(group.groupId) ? <><ChevronUp size={16} /><span className="text-xs">Hide</span></> : <><ChevronDown size={16} /><span className="text-xs">Compare</span></>}
                           </button>
                         </td>
                       </tr>
-                      {expandedPriceGroups.has(group.baseName) && (
+                      {expandedPriceGroups.has(group.groupId) && (
                         <tr>
                           <td colSpan={7} className="px-6 py-4 bg-gray-50">
-                            <div className="space-y-2">
-                              <h4 className="text-sm font-semibold text-gray-700 mb-3">Price Comparison for {group.baseName}:</h4>
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {group.items.map((item: any, itemIdx: number) => (
-                                  <div
-                                    key={itemIdx}
-                                    className={`bg-white p-4 rounded-lg border-2 shadow-sm ${
-                                      item.priceStatus === 'low' ? 'border-green-300 bg-green-50' :
-                                      item.priceStatus === 'high' ? 'border-red-300 bg-red-50' :
-                                      'border-gray-200'
-                                    }`}
-                                  >
-                                    <div className="flex justify-between items-start mb-2">
-                                      <div className="flex-1">
-                                        <p className="text-sm font-medium text-gray-900">{item.itemName}</p>
-                                        <p className="text-xs text-gray-500">{item.itemCode}</p>
-                                      </div>
-                                      <span className={`px-2 py-1 text-xs rounded-full ${
-                                        item.priceStatus === 'high' ? 'bg-red-100 text-red-700' : 
-                                        item.priceStatus === 'low' ? 'bg-green-100 text-green-700' : 
-                                        'bg-gray-100 text-gray-700'
+                            <h4 className="text-sm font-semibold text-gray-700 mb-3">Unit Price Breakdown — {group.groupName}</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {group.items.map((item: any) => (
+                                <div key={item.itemId} className={`bg-white p-4 rounded-lg border-2 shadow-sm ${
+                                  item.priceStatus === 'low' ? 'border-green-300' :
+                                  item.priceStatus === 'high' ? 'border-red-300' : 'border-gray-200'
+                                }`}>
+                                  <div className="flex justify-between items-start mb-2">
+                                    <div className="flex-1">
+                                      <p className="text-sm font-medium text-gray-900">{item.itemName}</p>
+                                      <p className="text-xs text-gray-500">{item.itemCode}</p>
+                                    </div>
+                                    <span className={`px-2 py-1 text-xs rounded-full ${
+                                      item.priceStatus === 'high' ? 'bg-red-100 text-red-700' :
+                                      item.priceStatus === 'low' ? 'bg-green-100 text-green-700' :
+                                      'bg-gray-100 text-gray-700'
+                                    }`}>{item.priceStatus.toUpperCase()}</span>
+                                  </div>
+                                  <div className="space-y-1 text-xs">
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-500">Pack Price:</span>
+                                      <span className="font-semibold">€{item.purchasePrice.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-500">Pack Qty:</span>
+                                      <span>{item.packQty}</span>
+                                    </div>
+                                    <div className="flex justify-between border-t pt-1">
+                                      <span className="text-gray-500">Unit Price:</span>
+                                      <span className="font-bold text-gray-900">€{item.unitPrice.toFixed(4)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-500">vs Avg:</span>
+                                      <span className={`font-semibold ${
+                                        item.priceDiffPercent > 0 ? 'text-red-600' : item.priceDiffPercent < 0 ? 'text-green-600' : 'text-gray-500'
                                       }`}>
-                                        {item.priceStatus.toUpperCase()}
+                                        {item.priceDiffPercent > 0 ? '+' : ''}{item.priceDiffPercent.toFixed(2)}%
                                       </span>
                                     </div>
-                                    <div className="space-y-1">
-                                      <div className="flex justify-between text-sm">
-                                        <span className="text-gray-600">Price:</span>
-                                        <span className="font-bold text-gray-900">€{item.pricePerPack.toFixed(2)}</span>
+                                    {item.supplier !== '-' && (
+                                      <div className="flex justify-between pt-1 border-t">
+                                        <span className="text-gray-500">Supplier:</span>
+                                        <span className="font-medium text-gray-900">{item.supplier}</span>
                                       </div>
-                                      <div className="flex justify-between text-xs">
-                                        <span className="text-gray-600">vs Avg:</span>
-                                        <span className={`font-semibold ${
-                                          parseFloat(item.priceDiffPercent) > 0 ? 'text-red-600' : 'text-green-600'
-                                        }`}>
-                                          {parseFloat(item.priceDiffPercent) > 0 ? '+' : ''}{item.priceDiffPercent}%
-                                        </span>
-                                      </div>
-                                      {item.supplier && (
-                                        <div className="flex justify-between text-xs pt-1 border-t">
-                                          <span className="text-gray-600">Supplier:</span>
-                                          <span className="font-medium text-gray-900">{item.supplier}</span>
-                                        </div>
-                                      )}
-                                      {item.category && (
-                                        <div className="flex justify-between text-xs">
-                                          <span className="text-gray-600">Category:</span>
-                                          <span className="font-medium text-gray-900">{item.category}</span>
-                                        </div>
-                                      )}
-                                    </div>
+                                    )}
                                   </div>
-                                ))}
-                              </div>
+                                </div>
+                              ))}
                             </div>
                           </td>
                         </tr>

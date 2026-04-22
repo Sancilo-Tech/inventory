@@ -983,7 +983,7 @@ const PaymentTrackerOffice: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    step="1"
+                    step="0.01"
                     min="0"
                     required
                     value={autoFormData.amount}
@@ -1162,7 +1162,7 @@ const PaymentTrackerOffice: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    step="1"
+                    step="0.01"
                     min="0"
                     required
                     value={formData.amount}

@@ -806,7 +806,7 @@ const Items: React.FC = () => {
                 />
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Price *</label>
-                  <input type="number" step="0.1" min="0" required value={formData.purchase_price} onChange={(e) => setFormData({ ...formData, purchase_price: e.target.value })} className={inputClass('purchase_price')} />
+                  <input type="number" step="0.01" min="0" required value={formData.purchase_price} onChange={(e) => setFormData({ ...formData, purchase_price: e.target.value })} className={inputClass('purchase_price')} />
                   {errors.purchase_price && <p className="text-xs text-red-500 mt-1">{errors.purchase_price}</p>}
                 </div>
               </div>

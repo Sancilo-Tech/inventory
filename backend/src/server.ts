@@ -28,7 +28,7 @@ app.use(cors({
         "http://localhost:3000",
         "http://localhost:5173",
         "https://inventory-silk-kappa.vercel.app",
-        "https://inventory-ilai.vercel.app/"
+        "https://inventory-ilai.vercel.app"
     ]
 }));
 

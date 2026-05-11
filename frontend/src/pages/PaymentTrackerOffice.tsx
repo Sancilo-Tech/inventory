@@ -21,7 +21,7 @@ const PaymentTrackerOffice: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"invoices" | "auto">("invoices");
   const [invoices, setInvoices] = useState<any[]>([]);
   const [autoInvoices, setAutoInvoices] = useState<any[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [_suppliers, setSuppliers] = useState<any[]>([]);
   const [filter, setFilter] = useState<
     "all" | "pending" | "paid" | "overdue" | "due_soon"
   >("all");

@@ -18,7 +18,6 @@ import {
   Calculator, 
   LogOut,
   User,
-  Bell,
   Settings as SettingsIcon,
   FileText,
   CreditCard,
@@ -30,9 +29,9 @@ import {
 const DashboardLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // const [showLocationDropdown, setShowLocationDropdown] = useState(false);
-  const [availableLocations, setAvailableLocations] = useState<any[]>([]);
+  const [_availableLocations, setAvailableLocations] = useState<any[]>([]);
   const { user, logout } = useAuth();
-  const { selectedLocation, setSelectedLocation } = useSelectedLocation();
+  const { selectedLocation } = useSelectedLocation();
   const navigate = useNavigate();
   const location = useLocation();
 

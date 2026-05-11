@@ -43,8 +43,8 @@ const CheckIn: React.FC = () => {
   const [todayStats, setTodayStats] = useState({ checkInCount: 0, checkOutCount: 0 });
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const { user } = useAuth();
-  const { selectedLocation } = useLocation();
+  useAuth();
+  useLocation();
   // showLoading/hideLoading kept for future use
   const { showLoading: _sl, hideLoading: _hl } = useLoading();
 

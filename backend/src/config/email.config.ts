@@ -14,7 +14,7 @@ import Mailgen from "mailgen";
 //     pass: process.env.BREVO_PASS, // must be App Password
 //   },
 // });
-const transporter = nodemailer.createTransport({
+export const transporter = nodemailer.createTransport({
   host: process.env.MAIL_HOST,
   port: 587,
   secure: false,

@@ -15,9 +15,7 @@ import Mailgen from "mailgen";
 //   },
 // });
 export const transporter = nodemailer.createTransport({
-  host: process.env.MAIL_HOST,
-  port: Number(process.env.MAIL_PORT) || 465,
-  secure: true,
+  service: "gmail",
   auth: {
     user: process.env.MAIL,
     pass: process.env.MAIL_PASS,

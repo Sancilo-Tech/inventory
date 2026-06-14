@@ -246,7 +246,7 @@ const PaymentTrackerOffice: React.FC = () => {
       setEditingAutoInvoice(invoice);
       setAutoFormData({
         invoice_name: invoice.invoiceName,
-        amount: (parseFloat(invoice.amount)+parseFloat(invoice.taxAmount)).toString(),
+        amount: (parseFloat(invoice.amount) + parseFloat(invoice.taxAmount || 0)).toString(),
         frequency: invoice.frequency || "monthly",
         due_date: invoice.dueDate || 0,
         notes: invoice.notes || "",
@@ -278,11 +278,11 @@ const PaymentTrackerOffice: React.FC = () => {
 
       const data = {
         ...autoFormData,
-        amount: parseFloat(baseAmount.toFixed(2)),
+        amount: parseFloat(baseAmount.toFixed(3)),
         due_date: parseInt(autoFormData.due_date),
         tax_id: autoFormData.tax_id || null,
         tax_percent: taxPercent || null,
-        tax_amount: taxPercent > 0 ? parseFloat(taxAmount.toFixed(2)) : null,
+        tax_amount: taxPercent > 0 ? parseFloat(taxAmount.toFixed(3)) : null,
       };
       if (editingAutoInvoice) {
         await invoiceAPI.updateAutoInvoiceDetail(editingAutoInvoice.invoiceId, {
@@ -329,10 +329,10 @@ const PaymentTrackerOffice: React.FC = () => {
 
       const data = {
         ...formData,
-        amount: parseFloat(baseAmount.toFixed(2)),
+        amount: parseFloat(baseAmount.toFixed(3)),
         tax_id: formData.tax_id || null,
         tax_percent: taxPercent || null,
-        tax_amount: taxPercent > 0 ? parseFloat(taxAmount.toFixed(2)) : null,
+        tax_amount: taxPercent > 0 ? parseFloat(taxAmount.toFixed(3)) : null,
         type: "general",
       };
 
@@ -402,7 +402,7 @@ const PaymentTrackerOffice: React.FC = () => {
         invoice_number: invoice.invoiceNumber,
         invoice_name: invoice.invoiceName,
         supplier_id: invoice.supplierId || "",
-        amount: (parseFloat(invoice.amount)+parseFloat(invoice.taxAmount)).toString(),
+        amount: (parseFloat(invoice.amount) + parseFloat(invoice.taxAmount || 0)).toString(),
         tax_id: invoice.taxId || "",
         invoice_date: new Date(invoice.invoiceDate).toISOString().split("T")[0],
         due_date: new Date(invoice.dueDate).toISOString().split("T")[0],
@@ -983,7 +983,7 @@ const PaymentTrackerOffice: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    step="0.01"
+                    step="0.001"
                     min="0"
                     required
                     value={autoFormData.amount}
@@ -1016,9 +1016,10 @@ const PaymentTrackerOffice: React.FC = () => {
                   {autoFormData.tax_id && autoFormData.amount && (() => {
                     const total = parseFloat(autoFormData.amount);
                     const taxPct = parseFloat(taxes.find(t => t.taxId === autoFormData.tax_id)?.taxPercentage || 0);
+                    if (!taxPct) return null;
                     const base = total / (1 + taxPct / 100);
                     const tax = total - base;
-                    return <p className="text-xs text-gray-500 mt-1">Base: €{base.toFixed(2)} + Tax: €{tax.toFixed(2)}</p>;
+                    return <p className="text-xs text-gray-500 mt-1">Base: €{base.toFixed(3)} + Tax: €{tax.toFixed(3)}</p>;
                   })()}
                 </div>
                 <div>
@@ -1162,7 +1163,7 @@ const PaymentTrackerOffice: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    step="0.01"
+                    step="0.001"
                     min="0"
                     required
                     value={formData.amount}
@@ -1192,11 +1193,12 @@ const PaymentTrackerOffice: React.FC = () => {
                   {formData.tax_id && formData.amount && (() => {
                     const total = parseFloat(formData.amount);
                     const taxPct = parseFloat(taxes.find(t => t.taxId === formData.tax_id)?.taxPercentage || 0);
+                    if (!taxPct) return null;
                     const base = total / (1 + taxPct / 100);
                     const tax = total - base;
                     return (
                       <p className="text-xs text-gray-500 mt-1">
-                        Base: €{base.toFixed(2)} + Tax: €{tax.toFixed(2)}
+                        Base: €{base.toFixed(3)} + Tax: €{tax.toFixed(3)}
                       </p>
                     );
                   })()}

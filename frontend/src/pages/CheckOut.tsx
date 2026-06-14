@@ -211,7 +211,7 @@ const CheckOut: React.FC = () => {
               </div>
               <div className="flex justify-between text-sm text-gray-600">
                 <span>Subtotal</span>
-                <span>€{scannedItems.reduce((s, i) => s + Number(i.purchasePrice) * i.quantity, 0).toFixed(2)}</span>
+                <span>€{scannedItems.reduce((s, i) => s + Number(i.purchasePrice) * i.quantity, 0).toFixed(3)}</span>
               </div>
               {/* Tax groups */}
               {(() => {
@@ -224,7 +224,7 @@ const CheckOut: React.FC = () => {
                 return Object.entries(groups).sort(([a], [b]) => Number(a) - Number(b)).map(([pct, amt]) => (
                   <div key={pct} className="flex justify-between text-xs text-orange-500 pl-2">
                     <span>Tax {pct}%</span>
-                    <span>€{amt.toFixed(2)}</span>
+                    <span>€{amt.toFixed(3)}</span>
                   </div>
                 ));
               })()}
@@ -233,10 +233,10 @@ const CheckOut: React.FC = () => {
                 <span>€{scannedItems.reduce((s, i) => {
                   const { taxAmount } = calcPricing(Number(i.purchasePrice), i.taxPercent);
                   return s + taxAmount * i.quantity;
-                }, 0).toFixed(2)}</span>
+                }, 0).toFixed(3)}</span>
               </div>
               <div className="flex justify-between font-bold text-gray-900 border-t pt-2">
-                <span>Grand Total</span><span>€{grandTotal.toFixed(2)}</span>
+                <span>Grand Total</span><span>€{grandTotal.toFixed(3)}</span>
               </div>
             </div>
           )}
@@ -282,14 +282,14 @@ const CheckOut: React.FC = () => {
                       <label className="text-xs text-gray-500 mb-1 block">
                         Qty (pack) &nbsp;
                         <span className="text-gray-400">
-                          {item.quantity} × {item.packQty} = {(item.quantity * item.packQty).toFixed(2)} {item.quantityType}
+                          {item.quantity} × {item.packQty} = {(item.quantity * item.packQty).toFixed(3)} {item.quantityType}
                         </span>
                       </label>
                       <input
                         type="number"
                         value={item.quantity}
                         onChange={e => updateQty(item.itemId, Number(e.target.value))}
-                        min="1" step="1"
+                        min="0.001" step="0.001"
                         className={`w-full px-2 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-red-400 ${
                           item.quantity > item.currentQty ? 'border-red-500 bg-red-50' : 'border-gray-300'
                         }`}
@@ -303,7 +303,7 @@ const CheckOut: React.FC = () => {
                     <div className="bg-gray-50 rounded-lg border border-gray-100 px-3 py-2 grid grid-cols-4 gap-2 text-xs text-center">
                       <div>
                         <p className="text-gray-400">Base Price</p>
-                        <p className="font-semibold text-gray-800">€{rate.toFixed(2)}</p>
+                        <p className="font-semibold text-gray-800">€{rate.toFixed(3)}</p>
                       </div>
                       <div>
                         <p className="text-gray-400">Tax %</p>
@@ -311,17 +311,17 @@ const CheckOut: React.FC = () => {
                       </div>
                       <div>
                         <p className="text-gray-400">Tax Amt</p>
-                        <p className="font-semibold text-orange-600">€{taxAmount.toFixed(2)}</p>
+                        <p className="font-semibold text-orange-600">€{taxAmount.toFixed(3)}</p>
                       </div>
                       <div>
                         <p className="text-gray-400">Unit Total</p>
-                        <p className="font-bold text-red-600">€{totalPrice.toFixed(2)}</p>
+                        <p className="font-bold text-red-600">€{totalPrice.toFixed(3)}</p>
                       </div>
                     </div>
 
                     <div className="flex justify-between items-center mt-2 text-sm">
-                      <span className="text-gray-500">Line Total ({item.quantity} × €{totalPrice.toFixed(2)})</span>
-                      <span className="font-bold text-gray-900">€{(totalPrice * item.quantity).toFixed(2)}</span>
+                      <span className="text-gray-500">Line Total ({item.quantity} × €{totalPrice.toFixed(3)})</span>
+                      <span className="font-bold text-gray-900">€{(totalPrice * item.quantity).toFixed(3)}</span>
                     </div>
                   </div>
                 );
@@ -334,7 +334,7 @@ const CheckOut: React.FC = () => {
               onClick={handleSubmit}
               className="w-full mt-4 bg-red-500 hover:bg-red-600 text-white py-3 rounded-lg font-semibold transition-colors"
             >
-              Submit Check-Out ({scannedItems.length} items) — €{grandTotal.toFixed(2)}
+              Submit Check-Out ({scannedItems.length} items) — €{grandTotal.toFixed(3)}
             </button>
           )}
         </div>
@@ -360,10 +360,10 @@ const CheckOut: React.FC = () => {
                   <div key={idx} className="text-sm border-b pb-2">
                     <div className="flex justify-between font-medium">
                       <span>{item.itemName} ×{item.quantity}</span>
-                      <span>€{(totalPrice * Number(item.quantity)).toFixed(2)}</span>
+                      <span>€{(totalPrice * Number(item.quantity)).toFixed(3)}</span>
                     </div>
                     <div className="text-gray-400 text-xs mt-0.5">
-                      €{Number(item.price).toFixed(2)} + {item.taxPercent ?? 0}% tax (€{taxAmount.toFixed(2)})
+                      €{Number(item.price).toFixed(3)} + {item.taxPercent ?? 0}% tax (€{taxAmount.toFixed(3)})
                     </div>
                   </div>
                 );
@@ -372,7 +372,7 @@ const CheckOut: React.FC = () => {
 
             <div className="border-t pt-3 space-y-1 text-sm">
               <div className="flex justify-between font-bold text-base">
-                <span>Total</span><span>€{billData.totalAmount.toFixed(2)}</span>
+                <span>Total</span><span>€{billData.totalAmount.toFixed(3)}</span>
               </div>
               <div className="flex justify-between text-gray-500"><span>Location</span><span>{billData.location}</span></div>
               <div className="flex justify-between text-gray-500"><span>User</span><span>{billData.user}</span></div>

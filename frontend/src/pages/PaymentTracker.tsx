@@ -179,10 +179,10 @@ const PaymentTracker: React.FC = () => {
 
       const data = {
         ...formData,
-        amount: parseFloat(baseAmount.toFixed(2)),
+        amount: parseFloat(baseAmount.toFixed(3)),
         tax_id: formData.tax_id || null,
         tax_percent: taxPercent || null,
-        tax_amount: taxPercent > 0 ? parseFloat(taxAmount.toFixed(2)) : null,
+        tax_amount: taxPercent > 0 ? parseFloat(taxAmount.toFixed(3)) : null,
         type: "purchase"
       };
 
@@ -248,7 +248,7 @@ const PaymentTracker: React.FC = () => {
         invoice_number: invoice.invoiceNumber,
         invoice_name: invoice.invoiceName,
         supplier_id: invoice.supplierId || '',
-        amount: (parseFloat(invoice.amount)+parseFloat(invoice.taxAmount)).toString(),
+        amount: (parseFloat(invoice.amount) + parseFloat(invoice.taxAmount || 0)).toString(),
         tax_id: invoice.taxId || '',
         invoice_date: new Date(invoice.invoiceDate).toISOString().split('T')[0],
         due_date: new Date(invoice.dueDate).toISOString().split('T')[0],
@@ -565,7 +565,7 @@ const PaymentTracker: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Amount (incl. tax) *</label>
-                  <input type="number" step="0.01" min="0" required value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  <input type="number" step="0.001" min="0" required value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Tax *</label>
@@ -578,9 +578,10 @@ const PaymentTracker: React.FC = () => {
                   {formData.tax_id && formData.amount && (() => {
                     const total = parseFloat(formData.amount);
                     const taxPct = parseFloat(taxes.find(t => t.taxId === formData.tax_id)?.taxPercentage || 0);
+                    if (!taxPct) return null;
                     const base = total / (1 + taxPct / 100);
                     const tax = total - base;
-                    return <p className="text-xs text-gray-500 mt-1">Base: €{base.toFixed(2)} + Tax: €{tax.toFixed(2)}</p>;
+                    return <p className="text-xs text-gray-500 mt-1">Base: €{base.toFixed(3)} + Tax: €{tax.toFixed(3)}</p>;
                   })()}
                 </div>
                 <div>

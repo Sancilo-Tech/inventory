@@ -179,7 +179,7 @@ const CheckIn: React.FC = () => {
               </div>
               <div className="flex justify-between text-sm text-gray-600">
                 <span>Subtotal (excl. tax)</span>
-                <span>€{scannedItems.reduce((s, i) => s + i.rate * i.quantity, 0).toFixed(2)}</span>
+                <span>€{scannedItems.reduce((s, i) => s + i.rate * i.quantity, 0).toFixed(3)}</span>
               </div>
               {/* Tax groups */}
               {(() => {
@@ -192,7 +192,7 @@ const CheckIn: React.FC = () => {
                 return Object.entries(groups).sort(([a], [b]) => Number(a) - Number(b)).map(([pct, amt]) => (
                   <div key={pct} className="flex justify-between text-xs text-orange-500 pl-2">
                     <span>Tax {pct}%</span>
-                    <span>€{amt.toFixed(2)}</span>
+                    <span>€{amt.toFixed(3)}</span>
                   </div>
                 ));
               })()}
@@ -201,10 +201,10 @@ const CheckIn: React.FC = () => {
                 <span>€{scannedItems.reduce((s, i) => {
                   const { taxAmount } = calcPricing(i.rate, i.taxPercent);
                   return s + taxAmount * i.quantity;
-                }, 0).toFixed(2)}</span>
+                }, 0).toFixed(3)}</span>
               </div>
               <div className="flex justify-between font-bold text-gray-900 border-t pt-2">
-                <span>Grand Total</span><span>€{grandTotal.toFixed(2)}</span>
+                <span>Grand Total</span><span>€{grandTotal.toFixed(3)}</span>
               </div>
             </div>
           )}
@@ -251,7 +251,7 @@ const CheckIn: React.FC = () => {
                     {priceModified && (
                       <div className="flex items-center gap-2 text-amber-700 bg-amber-100 rounded-lg px-3 py-2 mb-3 text-xs">
                         <AlertTriangle size={14} />
-                        <span>Price modified from original €{item.originalRate.toFixed(2)}</span>
+                        <span>Price modified from original €{item.originalRate.toFixed(3)}</span>
                         <label className="ml-auto flex items-center gap-1 cursor-pointer">
                           <input
                             type="checkbox"
@@ -272,14 +272,14 @@ const CheckIn: React.FC = () => {
                         <label className="text-xs text-gray-500 mb-1 block">
                           Qty (pack) &nbsp;
                           <span className="text-gray-400">
-                            {item.quantity} × {item.packQty} = {(item.quantity * item.packQty).toFixed(2)} {item.quantityType}
+                            {item.quantity} × {item.packQty} = {(item.quantity * item.packQty).toFixed(3)} {item.quantityType}
                           </span>
                         </label>
                         <input
                           type="number"
                           value={item.quantity}
                           onChange={e => updateItem(item.itemId, { quantity: Number(e.target.value) })}
-                          min="1" step="1"
+                          min="0.001" step="0.001"
                           className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-400"
                         />
                       </div>
@@ -289,7 +289,7 @@ const CheckIn: React.FC = () => {
                           type="number"
                           value={item.rate}
                           onChange={e => updateItem(item.itemId, { rate: Number(e.target.value) })}
-                          min="0.01" step="0.01"
+                          min="0.001" step="0.001"
                           className={`w-full px-2 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-green-400 ${
                             priceModified ? 'border-amber-400 bg-white font-semibold' : 'border-gray-300'
                           }`}
@@ -301,7 +301,7 @@ const CheckIn: React.FC = () => {
                     <div className="bg-white rounded-lg border border-gray-100 px-3 py-2 grid grid-cols-4 gap-2 text-xs text-center">
                       <div>
                         <p className="text-gray-400">Base Price</p>
-                        <p className="font-semibold text-gray-800">€{item.rate.toFixed(2)}</p>
+                        <p className="font-semibold text-gray-800">€{item.rate.toFixed(3)}</p>
                       </div>
                       <div>
                         <p className="text-gray-400">Tax %</p>
@@ -309,18 +309,18 @@ const CheckIn: React.FC = () => {
                       </div>
                       <div>
                         <p className="text-gray-400">Tax Amt</p>
-                        <p className="font-semibold text-orange-600">€{taxAmount.toFixed(2)}</p>
+                        <p className="font-semibold text-orange-600">€{taxAmount.toFixed(3)}</p>
                       </div>
                       <div>
                         <p className="text-gray-400">Unit Total</p>
-                        <p className="font-bold text-green-700">€{totalPrice.toFixed(2)}</p>
+                        <p className="font-bold text-green-700">€{totalPrice.toFixed(3)}</p>
                       </div>
                     </div>
 
                     {/* Line total */}
                     <div className="flex justify-between items-center mt-2 text-sm">
-                      <span className="text-gray-500">Line Total ({item.quantity} × €{totalPrice.toFixed(2)})</span>
-                      <span className="font-bold text-gray-900">€{(totalPrice * item.quantity).toFixed(2)}</span>
+                      <span className="text-gray-500">Line Total ({item.quantity} × €{totalPrice.toFixed(3)})</span>
+                      <span className="font-bold text-gray-900">€{(totalPrice * item.quantity).toFixed(3)}</span>
                     </div>
                   </div>
                 );
@@ -333,7 +333,7 @@ const CheckIn: React.FC = () => {
               onClick={handleSubmit}
               className="w-full mt-4 bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-semibold transition-colors"
             >
-              Submit Check-In ({scannedItems.length} items) — €{grandTotal.toFixed(2)}
+              Submit Check-In ({scannedItems.length} items) — €{grandTotal.toFixed(3)}
             </button>
           )}
         </div>
@@ -368,10 +368,10 @@ const CheckIn: React.FC = () => {
                   <div key={idx} className="text-sm border-b pb-2">
                     <div className="flex justify-between font-medium">
                       <span>{item.itemName} ×{item.quantity}</span>
-                      <span>€{(totalPrice * Number(item.quantity)).toFixed(2)}</span>
+                      <span>€{(totalPrice * Number(item.quantity)).toFixed(3)}</span>
                     </div>
                     <div className="flex justify-between text-gray-400 text-xs mt-0.5">
-                      <span>€{Number(item.price).toFixed(2)} + {item.taxPercent ?? 0}% tax (€{taxAmount.toFixed(2)})</span>
+                      <span>€{Number(item.price).toFixed(3)} + {item.taxPercent ?? 0}% tax (€{taxAmount.toFixed(3)})</span>
                       {item.priceChanged && (
                         <span className="text-amber-600 font-medium">price updated</span>
                       )}
@@ -383,7 +383,7 @@ const CheckIn: React.FC = () => {
 
             <div className="border-t pt-3 space-y-1 text-sm">
               <div className="flex justify-between font-bold text-base">
-                <span>Total</span><span>€{billData.totalAmount.toFixed(2)}</span>
+                <span>Total</span><span>€{billData.totalAmount.toFixed(3)}</span>
               </div>
               <div className="flex justify-between text-gray-500"><span>Location</span><span>{billData.location}</span></div>
               <div className="flex justify-between text-gray-500"><span>User</span><span>{billData.user}</span></div>

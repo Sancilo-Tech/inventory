@@ -199,6 +199,21 @@ export class ItemController {
                 where: { itemId: id }
             });
 
+            // Check for duplicate item code in same location (exclude current item)
+            if (item_code && location_id) {
+                const duplicate = await prisma.itemMaster.findFirst({
+                    where: {
+                        itemCode: item_code,
+                        locationId: location_id,
+                        itemId: { not: id }
+                    }
+                });
+                if (duplicate) {
+                    res.status(400).json({ message: `Item code "${item_code}" already exists in this location` });
+                    return;
+                }
+            }
+
             // Only create price history if price actually changed
             if (existingItem && Number(existingItem.purchasePrice) !== Number(purchase_price)) {
                 await prisma.itemPriceMaster.create({

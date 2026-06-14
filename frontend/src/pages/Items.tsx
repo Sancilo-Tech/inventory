@@ -574,9 +574,9 @@ const Items: React.FC = () => {
                     <td className="px-6 py-4 text-sm text-gray-600">{item.currentQty}</td>
                     <td className="px-6 py-4 text-sm text-gray-600 capitalize">{item.quantityType || 'unit'}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">{item.tax?.taxPercentage ?? item.taxPercent ?? '-'}%</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">€{Number(item.purchasePrice).toFixed(2)}</td>
-                    <td className="px-6 py-4 text-sm text-orange-600">€{(Number(item.totalAmount) - Number(item.purchasePrice)).toFixed(2)}</td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">€{Number(item.totalAmount).toFixed(2)}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600">€{Number(item.purchasePrice).toFixed(3)}</td>
+                    <td className="px-6 py-4 text-sm text-orange-600">€{(Number(item.totalAmount) - Number(item.purchasePrice)).toFixed(3)}</td>
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">€{Number(item.totalAmount).toFixed(3)}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">{item.supplier?.supplierName || '-'}</td>
                     <td className="px-6 py-4 text-sm text-right">
                       <div className="flex justify-end gap-2">
@@ -806,7 +806,7 @@ const Items: React.FC = () => {
                 />
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Price *</label>
-                  <input type="number" step="0.01" min="0" required value={formData.purchase_price} onChange={(e) => setFormData({ ...formData, purchase_price: e.target.value })} className={inputClass('purchase_price')} />
+                  <input type="number" step="0.001" min="0" required value={formData.purchase_price} onChange={(e) => setFormData({ ...formData, purchase_price: e.target.value })} className={inputClass('purchase_price')} />
                   {errors.purchase_price && <p className="text-xs text-red-500 mt-1">{errors.purchase_price}</p>}
                 </div>
               </div>
@@ -815,11 +815,11 @@ const Items: React.FC = () => {
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Current Quantity</label>
-                  <input type="number" step="1" min="0" value={formData.current_qty} onChange={(e) => setFormData({ ...formData, current_qty: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  <input type="number" step="0.001" min="0" value={formData.current_qty} onChange={(e) => setFormData({ ...formData, current_qty: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Pack Quantity</label>
-                  <input type="number" step="1" min="0" value={formData.packQty} onChange={(e) => setFormData({ ...formData, packQty: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                  <input type="number" step="0.001" min="0" value={formData.packQty} onChange={(e) => setFormData({ ...formData, packQty: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Quantity Type *</label>
@@ -835,26 +835,26 @@ const Items: React.FC = () => {
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Default Check-In</label>
-                  <input type="number" min="0" required value={formData.defaultIncrease} onChange={(e) => setFormData({ ...formData, defaultIncrease: e.target.value })} className={inputClass('defaultIncrease')} />
+                  <input type="number" step="0.001" min="0" required value={formData.defaultIncrease} onChange={(e) => setFormData({ ...formData, defaultIncrease: e.target.value })} className={inputClass('defaultIncrease')} />
                   {errors.defaultIncrease && <p className="text-xs text-red-500 mt-1">{errors.defaultIncrease}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Default Check-Out</label>
-                  <input type="number" min="0" required value={formData.defaultDecrease} onChange={(e) => setFormData({ ...formData, defaultDecrease: e.target.value })} className={inputClass('defaultDecrease')} />
+                  <input type="number" step="0.001" min="0" required value={formData.defaultDecrease} onChange={(e) => setFormData({ ...formData, defaultDecrease: e.target.value })} className={inputClass('defaultDecrease')} />
                   {errors.defaultDecrease && <p className="text-xs text-red-500 mt-1">{errors.defaultDecrease}</p>}
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">ROL</label>
-                    <input type="number" min="0" value={formData.rol} onChange={(e) => setFormData({ ...formData, rol: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    <input type="number" step="0.001" min="0" value={formData.rol} onChange={(e) => setFormData({ ...formData, rol: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">MOQ</label>
-                    <input type="number" min="0" value={formData.moq} onChange={(e) => setFormData({ ...formData, moq: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    <input type="number" step="0.001" min="0" value={formData.moq} onChange={(e) => setFormData({ ...formData, moq: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">EOQ</label>
-                    <input type="number" min="0" value={formData.eoq} onChange={(e) => setFormData({ ...formData, eoq: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                    <input type="number" step="0.001" min="0" value={formData.eoq} onChange={(e) => setFormData({ ...formData, eoq: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
                   </div>
                 </div>
               </div>

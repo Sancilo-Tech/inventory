@@ -113,13 +113,13 @@ export class InvoiceController {
     static async markAsPaid(req: any, res: Response, next: NextFunction) {
         try {
             const { invoiceId } = req.params;
-            const { payment_mode } = req.body;
+            const { payment_mode, paid_date } = req.body;
 
             const invoice = await prisma.invoice.update({
                 where: { invoiceId: invoiceId },
                 data: {
                     status: 'paid',
-                    paidDate: new Date(),
+                    paidDate: paid_date ? new Date(paid_date) : new Date(),
                     paymentMode: payment_mode
                 }
             });

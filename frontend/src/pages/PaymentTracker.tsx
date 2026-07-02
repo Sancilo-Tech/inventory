@@ -24,6 +24,7 @@ const PaymentTracker: React.FC = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string>('');
   const [paymentMode, setPaymentMode] = useState('');
+  const [paidDate, setPaidDate] = useState('');
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailStartDate, setEmailStartDate] = useState('');
   const [emailEndDate, setEmailEndDate] = useState('');
@@ -212,6 +213,7 @@ const PaymentTracker: React.FC = () => {
   const handleMarkAsPaid = async (invoiceId: string) => {
     setSelectedInvoiceId(invoiceId);
     setPaymentMode('');
+    setPaidDate(new Date().toISOString().split('T')[0]);
     setShowPaymentModal(true);
   };
 
@@ -220,9 +222,13 @@ const PaymentTracker: React.FC = () => {
       toast.error('Please select payment mode');
       return;
     }
+    if (!paidDate) {
+      toast.error('Please select paid date');
+      return;
+    }
     showLoading('Updating status...');
     try {
-      await invoiceAPI.markAsPaid(selectedInvoiceId, { payment_mode: paymentMode });
+      await invoiceAPI.markAsPaid(selectedInvoiceId, { payment_mode: paymentMode, paid_date: paidDate });
       toast.success('Invoice marked as paid');
       setShowPaymentModal(false);
       fetchInvoices();
@@ -703,8 +709,12 @@ const PaymentTracker: React.FC = () => {
                   {payment.map((p) => (
                     <option key={p.typeId} value={p.typeName}>{p.typeName}</option>
                   ))}
-                  
+
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Paid Date *</label>
+                <input type="date" value={paidDate} onChange={(e) => setPaidDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
               </div>
               <div className="flex gap-2 justify-end">
                 <button onClick={() => setShowPaymentModal(false)} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">

@@ -6,7 +6,7 @@ const PDFDocument = require('pdfkit');
 export class InvoiceController {
     static async createInvoice(req: any, res: Response, next: NextFunction) {
         try {
-            const { invoice_number, invoice_name, supplier_id, amount, invoice_date, due_date, notes, type, tax_id, tax_percent, tax_amount } = req.body;
+            const { invoice_number, invoice_name, supplier_id, amount, invoice_date, due_date, notes, type, tax_id, tax_percent, tax_amount, tax2_id, tax2_percent, tax2_amount } = req.body;
             const locationId = req.headers.location_id;
             const userId = req.user.id;
 
@@ -29,7 +29,10 @@ export class InvoiceController {
                     invoiceType: type || 'purchase',
                     taxId: tax_id || null,
                     taxPercent: tax_percent || null,
-                    taxAmount: tax_amount || null
+                    taxAmount: tax_amount || null,
+                    tax2Id: tax2_id || null,
+                    tax2Percent: tax2_percent || null,
+                    tax2Amount: tax2_amount || null,
                 }
             });
 
@@ -73,7 +76,7 @@ export class InvoiceController {
     static async updateInvoice(req: any, res: Response, next: NextFunction) {
         try {
             const { invoiceId } = req.params;
-            const { invoice_number, invoice_name, supplier_id, amount, invoice_date, due_date, notes, status, type, tax_id, tax_percent, tax_amount } = req.body;
+            const { invoice_number, invoice_name, supplier_id, amount, invoice_date, due_date, notes, status, type, tax_id, tax_percent, tax_amount, tax2_id, tax2_percent, tax2_amount } = req.body;
 
             const updateData: any = {
                 invoiceNumber: invoice_number,
@@ -86,7 +89,10 @@ export class InvoiceController {
                 status: status,
                 taxId: tax_id || null,
                 taxPercent: tax_percent || null,
-                taxAmount: tax_amount || null
+                taxAmount: tax_amount || null,
+                tax2Id: tax2_id || null,
+                tax2Percent: tax2_percent || null,
+                tax2Amount: tax2_amount || null,
             };
 
             if (type) {

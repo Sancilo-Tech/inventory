@@ -48,11 +48,9 @@ export const startScheduler = () => {
 
 const createInvoice = async (data: any) => {
   try {
-    const date = new Date()
-    const invoiceNumber = await generateNextInvoiceNumber(data.invoiceType)
     const invoice = await prisma.invoice.create({
       data: {
-        invoiceNumber,
+        invoiceNumber: `DRAFT-${crypto.randomUUID()}`,
         invoiceName: data.invoiceName,
         amount: data.amount,
         invoiceDate: new Date(),

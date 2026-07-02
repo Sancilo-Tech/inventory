@@ -50,6 +50,7 @@ interface Item {
   defaultDecrease?: number;
   packQty?: number;
   groupName?: string;
+  createdAt?: string;
   supplier?: { supplierName: string };
   type?: { categoryName: string };
   tax?: { tax_name: string,taxPercentage:number };
@@ -148,6 +149,8 @@ const Items: React.FC = () => {
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [qtyType,setQtyType]=useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSupplier, setSelectedSupplier] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [itemCodeExists, setItemCodeExists] = useState(false);
   const [formData, setFormData] = useState(defaultFormData);
@@ -157,14 +160,17 @@ const Items: React.FC = () => {
   const locationId = selectedLocation ? JSON.parse(selectedLocation).locationId : '';
 
   const filteredItems = useMemo(() => {
+    let result = items;
+    if (selectedSupplier) result = result.filter(item => item.supplierId === selectedSupplier);
+    if (selectedGroup) result = result.filter(item => item.groupName === selectedGroup);
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return items;
-    return items.filter(item =>
+    if (query) result = result.filter(item =>
       item.itemName.toLowerCase().includes(query) ||
       item.itemCode.toLowerCase().includes(query) ||
       (item.barcode && item.barcode.toLowerCase().includes(query))
     );
-  }, [items, searchQuery]);
+    return result;
+  }, [items, searchQuery, selectedSupplier, selectedGroup]);
 
  
   useEffect(() => {
@@ -413,11 +419,35 @@ const Items: React.FC = () => {
 
   const exportToPDF = async () => {
     const doc = new jsPDF();
-    
+    const exportItems = [...filteredItems].sort((a, b) =>
+      new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
+    );
+    const supplierLabel = selectedSupplier
+      ? suppliers.find(s => s.supplierId === selectedSupplier)?.supplierName
+      : null;
+    const groupLabel = selectedGroup
+      ? group.find(g => g.typeName === selectedGroup)?.typeName
+      : null;
+    const exportDate = new Date().toLocaleString();
+
     doc.setFontSize(18);
     doc.text('Items List', 14, 20);
-    
-    const tableData = await Promise.all(items.map(async (item) => {
+    let startY = 28;
+    if (supplierLabel) {
+      doc.setFontSize(11);
+      doc.text(`Supplier: ${supplierLabel}`, 14, 28);
+      startY = 34;
+    }
+    if (groupLabel) {
+      doc.setFontSize(11);
+      doc.text(`Group: ${groupLabel}`, 14, startY);
+      startY += 6;
+    }
+    doc.setFontSize(9);
+    doc.text(`Exported: ${exportDate}`, 14, startY);
+    startY += 6;
+
+    const tableData = await Promise.all(exportItems.map(async (item) => {
       if (item.barcode) {
         const canvas = document.createElement('canvas');
         JsBarcode(canvas, item.barcode, {
@@ -428,26 +458,18 @@ const Items: React.FC = () => {
           fontSize: 12,
           margin: 5
         });
-        return {
-          itemCode: item.itemCode,
-          itemName: item.itemName,
-          barcodeImg: canvas.toDataURL('image/png')
-        };
+        return { itemCode: item.itemCode, itemName: item.itemName, barcodeImg: canvas.toDataURL('image/png') };
       }
-      return {
-        itemCode: item.itemCode,
-        itemName: item.itemName,
-        barcodeImg: null
-      };
+      return { itemCode: item.itemCode, itemName: item.itemName, barcodeImg: null };
     }));
-    
+
     autoTable(doc, {
       head: [['Item Code', 'Item Name', 'Barcode']],
       body: tableData.flatMap(item => [
         [item.itemCode, item.itemName, ''],
         [{ content: '', colSpan: 3 }]
       ]),
-      startY: 30,
+      startY,
       theme: 'grid',
       headStyles: { fillColor: [59, 130, 246], halign: 'center' },
       columnStyles: {
@@ -455,13 +477,9 @@ const Items: React.FC = () => {
         1: { cellWidth: 75, halign: 'left' },
         2: { cellWidth: 70, halign: 'center' }
       },
-      styles: {
-        minCellHeight: 20
-      },
+      styles: { minCellHeight: 20 },
       didParseCell: (data: any) => {
-        if (data.row.index % 2 !== 0) {
-          data.cell.styles.minCellHeight = 15;
-        }
+        if (data.row.index % 2 !== 0) data.cell.styles.minCellHeight = 15;
       },
       didDrawCell: (data: any) => {
         if (data.column.index === 2 && data.cell.section === 'body' && data.row.index % 2 === 0) {
@@ -476,8 +494,13 @@ const Items: React.FC = () => {
         }
       }
     });
-    
-    doc.save('items-with-barcodes.pdf');
+
+    const fileName = groupLabel
+      ? `items-group-${groupLabel.replace(/\s+/g, '-')}.pdf`
+      : supplierLabel
+      ? `items-${supplierLabel.replace(/\s+/g, '-')}.pdf`
+      : 'items-with-barcodes.pdf';
+    doc.save(fileName);
     toast.success('PDF exported successfully');
   };
 
@@ -510,14 +533,34 @@ const Items: React.FC = () => {
         </div>
       </div>
 
-      <div className="my-4">
+      <div className="my-4 flex gap-3">
         <input
           type="text"
           placeholder="Search by item name, code or barcode..."
           value={searchQuery}
           onChange={handleSearch}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
+        <select
+          value={selectedSupplier}
+          onChange={e => setSelectedSupplier(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[200px]"
+        >
+          <option value="">All Suppliers</option>
+          {suppliers.map(s => (
+            <option key={s.supplierId} value={s.supplierId}>{s.supplierName}</option>
+          ))}
+        </select>
+        <select
+          value={selectedGroup}
+          onChange={e => setSelectedGroup(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[180px]"
+        >
+          <option value="">All Groups</option>
+          {group.map(g => (
+            <option key={g.typeId} value={g.typeName}>{g.typeName}</option>
+          ))}
+        </select>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
@@ -952,3 +995,7 @@ const Items: React.FC = () => {
 };
 
 export default Items;
+
+
+
+

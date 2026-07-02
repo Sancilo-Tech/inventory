@@ -231,6 +231,9 @@ model Invoice {
   taxId          String?       @map("tax_id") @db.Uuid
   taxPercent     Decimal?      @map("tax_percent") @db.Decimal(5, 2)
   taxAmount      Decimal?      @map("tax_amount") @db.Decimal(10, 2)
+  tax2Id         String?       @map("tax2_id") @db.Uuid
+  tax2Percent    Decimal?      @map("tax2_percent") @db.Decimal(5, 2)
+  tax2Amount     Decimal?      @map("tax2_amount") @db.Decimal(10, 2)
   totalQuantity  Decimal?      @map("total_quantity") @db.Decimal(10, 2)
   grandTotal     Decimal?      @map("grand_total") @db.Decimal(10, 2)
   @@unique([invoiceNumber,supplierId,invoiceType])
@@ -254,6 +257,9 @@ model AutoInvoice {
   taxId          String?       @map("tax_id") @db.Uuid
   taxPercent     Decimal?      @map("tax_percent") @db.Decimal(5, 2)
   taxAmount      Decimal?      @map("tax_amount") @db.Decimal(10, 2)
+  tax2Id         String?       @map("tax2_id") @db.Uuid
+  tax2Percent    Decimal?      @map("tax2_percent") @db.Decimal(5, 2)
+  tax2Amount     Decimal?      @map("tax2_amount") @db.Decimal(10, 2)
   @@map("auto_invoices")
 }
 

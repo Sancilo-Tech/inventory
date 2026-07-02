@@ -55,18 +55,24 @@ const FinalizeCheckinModal: React.FC<Props> = ({ scannedItems, onSuccess, onCanc
 
   const totals = useMemo(() => {
     let totalQty = 0, totalAmount = 0, totalTax = 0;
+    const taxGroups: Record<number, number> = {};
     scannedItems.forEach(item => {
       const { taxAmount, totalPrice } = calcPricing(item.rate, item.taxPercent);
       totalQty += item.quantity;
       totalAmount += item.rate * item.quantity;
-      totalTax += taxAmount * item.quantity;
+      const itemTax = taxAmount * item.quantity;
+      totalTax += itemTax;
       void totalPrice;
+      if (item.taxPercent > 0) {
+        taxGroups[item.taxPercent] = (taxGroups[item.taxPercent] || 0) + itemTax;
+      }
     });
     return {
       totalQty: parseFloat(totalQty.toFixed(3)),
       totalAmount: parseFloat(totalAmount.toFixed(3)),
       totalTax: parseFloat(totalTax.toFixed(3)),
       grandTotal: parseFloat((totalAmount + totalTax).toFixed(3)),
+      taxGroups,
     };
   }, [scannedItems]);
 
@@ -190,7 +196,10 @@ const FinalizeCheckinModal: React.FC<Props> = ({ scannedItems, onSuccess, onCanc
             <div className="border-t pt-2 space-y-1">
               <div className="flex justify-between text-gray-600"><span>Total Qty</span><span>{totals.totalQty}</span></div>
               <div className="flex justify-between text-gray-600"><span>Amount (excl. tax)</span><span>€{totals.totalAmount.toFixed(3)}</span></div>
-              <div className="flex justify-between text-orange-600"><span>Total Tax</span><span>€{totals.totalTax.toFixed(3)}</span></div>
+              {Object.entries(totals.taxGroups).sort(([a],[b]) => parseFloat(a)-parseFloat(b)).map(([pct, amt]) => (
+                <div key={pct} className="flex justify-between text-orange-500 text-xs"><span>Tax {pct}%</span><span>€{(amt as number).toFixed(3)}</span></div>
+              ))}
+              <div className="flex justify-between text-orange-600 font-medium"><span>Total Tax</span><span>€{totals.totalTax.toFixed(3)}</span></div>
               <div className="flex justify-between font-bold text-gray-900 text-base border-t pt-1"><span>Grand Total</span><span>€{totals.grandTotal.toFixed(3)}</span></div>
             </div>
           </div>

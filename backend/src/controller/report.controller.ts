@@ -1,6 +1,5 @@
 import { Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
-import { qtyType } from "@prisma/client";
 
 export class ReportController {
     static async getSummary(req: any, res: Response, next: NextFunction) {

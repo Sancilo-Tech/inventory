@@ -331,7 +331,7 @@ const Items: React.FC = () => {
       if (message.toLowerCase().includes('item code already exists')) {
         toast.error(`Item code "${formData.item_code}" already exists in this location`);
       } else {
-        toast.error(message);
+        toast.error("Failed to save item");
       }
     } finally {
       hideLoading();

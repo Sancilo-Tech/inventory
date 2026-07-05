@@ -161,7 +161,7 @@ const CheckOut: React.FC = () => {
       fetchTodayStats();
       fetchAllItems();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Check-out failed');
+      toast.error('Check-out failed');
     } finally {
       hideLoading();
     }

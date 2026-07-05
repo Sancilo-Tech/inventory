@@ -458,7 +458,7 @@ static async autoInvoice(req: any, res: Response, next: NextFunction) {
                     totalAmount += rate * qty;
                     totalTax += taxAmt * qty;
 
-                    processedItems.push({ item_id: it.item_id, quantity: qty, rate, taxPercent: taxPct, taxAmount: taxAmt, lineTotal, applyNewPrice: it.applyNewPrice !== false, quantityType: it.quantityType || item.quantityType, notes: it.notes || '' });
+                    processedItems.push({ item_id: it.item_id, quantity: qty, rate, taxPercent: taxPct, taxAmount: taxAmt, lineTotal, applyNewPrice: it.applyNewPrice !== false, quantityType: item.quantityType, notes: it.notes || '' });
                 }
 
                 const grandTotal = parseFloat((totalAmount + totalTax).toFixed(2));

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MapPin, Plus, Edit2, Trash2, X, Eye } from 'lucide-react';
 import { locationAPI } from '../services/api';
 import { useLoading } from '../context/LoadingContext';
+import { toast } from 'react-toastify';
 
 interface Location {
   locationId: string;
@@ -48,6 +49,7 @@ const Locations: React.FC = () => {
       closeModal();
     } catch (error) {
       console.error('Error saving location:', error);
+      toast.error('Failed to save location');
     } finally {
       setLoading(false);
       hideLoading()
@@ -60,8 +62,9 @@ const Locations: React.FC = () => {
       try {
         await locationAPI.deleteLocation(id);
         await fetchLocations();
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error deleting location:', error);
+        toast.error(error?.response?.data?.message);
       }
       finally{
         hideLoading()

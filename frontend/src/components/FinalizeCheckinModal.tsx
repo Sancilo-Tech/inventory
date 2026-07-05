@@ -108,13 +108,7 @@ const FinalizeCheckinModal: React.FC<Props> = ({ scannedItems, onSuccess, onCanc
       toast.success(`Check-in finalized — Invoice ${form.invoiceNumber}`);
       onSuccess();
     } catch (err: any) {
-      const msg = err.response?.data?.message || 'Failed to finalize check-in';
-      if (err.response?.status === 409) {
-        setErrors(prev => ({ ...prev, invoiceNumber: msg }));
-        toast.error(msg);
-      } else {
-        toast.error(msg);
-      }
+      toast.error("Failed to check in");
     } finally {
       setSubmitting(false);
     }

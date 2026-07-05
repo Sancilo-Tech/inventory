@@ -43,7 +43,7 @@ const Login: React.FC = () => {
         }
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed');
+      setError("Invalid email or password");
     } finally {
       setLoading(false);
     }

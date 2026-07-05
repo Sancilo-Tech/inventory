@@ -168,7 +168,7 @@ model TransactionLog {
   takenById       String?         @map("taken_by_id") @db.Uuid
   takenBy         String?         @map("taken_by")
   price           Decimal         @db.Decimal(10, 2)@default(0)
-  quantityType    qtyType         @default(gram) @map("quantity_type")
+  quantityType    String          @default("gram") @map("quantity_type")
   remarks         String?
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")

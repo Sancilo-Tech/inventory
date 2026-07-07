@@ -25,5 +25,6 @@ route.delete("/auto/delete/:invoiceId", asyncHandler(InvoiceController.deleteAut
 // checkin invoice
 route.post("/checkin/finalize", asyncHandler(InvoiceController.finalizeCheckin));
 route.get("/checkin/all", asyncHandler(InvoiceController.getCheckinInvoices));
+route.post("/checkin/backfill-purchase", asyncHandler(InvoiceController.backfillPurchaseInvoices));
 
 export default route;

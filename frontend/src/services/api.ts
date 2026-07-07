@@ -163,6 +163,7 @@ export const invoiceAPI = {
   deleteAutoInvoice: (invoiceId: string) => api.delete(`/invoice/auto/delete/${invoiceId}`),
   finalizeCheckin: (data: any) => api.post('/invoice/checkin/finalize', data),
   getCheckinInvoices: (params?: any) => api.get('/invoice/checkin/all', { params }),
+  backfillPurchaseInvoices: () => api.post('/invoice/checkin/backfill-purchase'),
 };
 
 export const dashboardAPI = {

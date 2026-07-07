@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Plus,
   Edit2,
@@ -13,6 +13,38 @@ import {
   RefreshCw,
   Download,
 } from "lucide-react";
+
+function TopScrollbar({ children }: { children: React.ReactNode }) {
+  const topRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const syncingTop = useRef(false);
+  const syncingInner = useRef(false);
+
+  useEffect(() => {
+    const top = topRef.current;
+    const inner = innerRef.current;
+    if (!top || !inner) return;
+    const tableEl = inner.querySelector('table');
+    if (tableEl) top.firstElementChild && ((top.firstElementChild as HTMLElement).style.width = tableEl.scrollWidth + 'px');
+
+    const onTopScroll = () => { if (syncingTop.current) { syncingTop.current = false; return; } syncingInner.current = true; inner.scrollLeft = top.scrollLeft; };
+    const onInnerScroll = () => { if (syncingInner.current) { syncingInner.current = false; return; } syncingTop.current = true; top.scrollLeft = inner.scrollLeft; };
+    top.addEventListener('scroll', onTopScroll);
+    inner.addEventListener('scroll', onInnerScroll);
+    return () => { top.removeEventListener('scroll', onTopScroll); inner.removeEventListener('scroll', onInnerScroll); };
+  }, [children]);
+
+  return (
+    <>
+      <div ref={topRef} className="overflow-x-auto" style={{ overflowY: 'hidden', height: 12 }}>
+        <div style={{ height: 1 }} />
+      </div>
+      <div ref={innerRef} className="overflow-x-auto">
+        {children}
+      </div>
+    </>
+  );
+}
 import { categoriesAPI, invoiceAPI, supplierAPI, taxAPI } from "../services/api";
 import { useLoading } from "../context/LoadingContext";
 import { toast } from "react-toastify";
@@ -71,9 +103,12 @@ const PaymentTrackerOffice: React.FC = () => {
   const { showLoading, hideLoading } = useLoading();
 
   useEffect(() => {
+    fetchUpcomingAlerts();
+  }, []);
+
+  useEffect(() => {
     fetchInvoices();
     fetchSuppliers();
-    fetchUpcomingAlerts();
     fetchName();
     fetchTaxes();
     fetchPayment();
@@ -116,19 +151,23 @@ const PaymentTrackerOffice: React.FC = () => {
           invoiceDate.setHours(0, 0, 0, 0);
 
           if (dateFilter === "today") {
+            const endOfToday = new Date(today); endOfToday.setHours(23, 59, 59, 999);
             return invoiceDate.getTime() === today.getTime();
           } else if (dateFilter === "last7days") {
             const sevenDaysAgo = new Date(today);
             sevenDaysAgo.setDate(today.getDate() - 7);
-            return invoiceDate >= sevenDaysAgo && invoiceDate <= today;
+            const endOfToday = new Date(today); endOfToday.setHours(23, 59, 59, 999);
+            return invoiceDate >= sevenDaysAgo && invoiceDate <= endOfToday;
           } else if (dateFilter === "last30days") {
             const thirtyDaysAgo = new Date(today);
             thirtyDaysAgo.setDate(today.getDate() - 30);
-            return invoiceDate >= thirtyDaysAgo && invoiceDate <= today;
+            const endOfToday = new Date(today); endOfToday.setHours(23, 59, 59, 999);
+            return invoiceDate >= thirtyDaysAgo && invoiceDate <= endOfToday;
           } else if (dateFilter === "lastyear") {
             const oneYearAgo = new Date(today);
             oneYearAgo.setFullYear(today.getFullYear() - 1);
-            return invoiceDate >= oneYearAgo && invoiceDate <= today;
+            const endOfToday = new Date(today); endOfToday.setHours(23, 59, 59, 999);
+            return invoiceDate >= oneYearAgo && invoiceDate <= endOfToday;
           } else if (
             dateFilter === "custom" &&
             customStartDate &&
@@ -731,6 +770,7 @@ const PaymentTrackerOffice: React.FC = () => {
             );
           })()}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+          <TopScrollbar>
           <div className="overflow-x-auto">
             <table className="w-full min-w-max">
               <thead className="bg-gray-50 border-b border-gray-200">
@@ -835,6 +875,7 @@ const PaymentTrackerOffice: React.FC = () => {
               </tbody>
             </table>
           </div>
+          </TopScrollbar>
           </div>
         </>
       )}

@@ -84,52 +84,53 @@ const Reports: React.FC = () => {
 
   const getDateRange = () => {
     const now = new Date();
-    let startDate, endDate;
+    let startDate: Date, endDate: Date;
 
     switch (dateFilter) {
       case 'today':
-        startDate = new Date(now.setHours(0, 0, 0, 0));
-        endDate = new Date(now.setHours(23, 59, 59, 999));
+        startDate = new Date(now); startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(now); endDate.setHours(23, 59, 59, 999);
         break;
-      case 'yesterday':
-        const yesterday = new Date(now);
-        yesterday.setDate(yesterday.getDate() - 1);
-        startDate = new Date(yesterday.setHours(0, 0, 0, 0));
-        endDate = new Date(yesterday.setHours(23, 59, 59, 999));
+      case 'yesterday': {
+        const y = new Date(now); y.setDate(y.getDate() - 1);
+        startDate = new Date(y); startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(y); endDate.setHours(23, 59, 59, 999);
         break;
+      }
       case 'last7days':
-        startDate = new Date(now.setDate(now.getDate() - 7));
-        endDate = new Date();
+        startDate = new Date(now); startDate.setDate(startDate.getDate() - 7); startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(now); endDate.setHours(23, 59, 59, 999);
         break;
       case 'last30days':
-        startDate = new Date(now.setDate(now.getDate() - 30));
-        endDate = new Date();
+        startDate = new Date(now); startDate.setDate(startDate.getDate() - 30); startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(now); endDate.setHours(23, 59, 59, 999);
         break;
-      case 'thisweek':
-        const firstDay = now.getDate() - now.getDay();
-        startDate = new Date(now.setDate(firstDay));
-        startDate.setHours(0, 0, 0, 0);
-        endDate = new Date();
+      case 'thisweek': {
+        startDate = new Date(now); startDate.setDate(startDate.getDate() - startDate.getDay()); startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(now); endDate.setHours(23, 59, 59, 999);
         break;
+      }
       case 'thismonth':
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        endDate = new Date();
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        endDate = new Date(now); endDate.setHours(23, 59, 59, 999);
         break;
       case 'thisyear':
-        startDate = new Date(now.getFullYear(), 0, 1);
-        endDate = new Date();
+        startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+        endDate = new Date(now); endDate.setHours(23, 59, 59, 999);
         break;
       case 'overall':
-        startDate = new Date('2020-01-01');
-        endDate = new Date();
+        startDate = new Date('2020-01-01T00:00:00.000Z');
+        endDate = new Date(now); endDate.setHours(23, 59, 59, 999);
         break;
       case 'custom':
         startDate = customStartDate ? new Date(customStartDate) : new Date('2020-01-01');
-        endDate = customEndDate ? new Date(customEndDate) : new Date();
+        startDate.setHours(0, 0, 0, 0);
+        endDate = customEndDate ? new Date(customEndDate) : new Date(now);
+        endDate.setHours(23, 59, 59, 999);
         break;
       default:
-        startDate = new Date(now.setHours(0, 0, 0, 0));
-        endDate = new Date();
+        startDate = new Date(now); startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(now); endDate.setHours(23, 59, 59, 999);
     }
 
     return { startDate: startDate.toISOString(), endDate: endDate.toISOString() };

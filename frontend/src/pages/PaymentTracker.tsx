@@ -1,7 +1,39 @@
 /* eslint-disable prefer-const */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Edit2, Trash2, X, CheckCircle, AlertTriangle, Clock, Filter, Download, Mail } from 'lucide-react';
+
+function TopScrollbar({ children }: { children: React.ReactNode }) {
+  const topRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const syncingTop = useRef(false);
+  const syncingInner = useRef(false);
+
+  useEffect(() => {
+    const top = topRef.current;
+    const inner = innerRef.current;
+    if (!top || !inner) return;
+    const tableEl = inner.querySelector('table');
+    if (tableEl) top.firstElementChild && ((top.firstElementChild as HTMLElement).style.width = tableEl.scrollWidth + 'px');
+
+    const onTopScroll = () => { if (syncingTop.current) { syncingTop.current = false; return; } syncingInner.current = true; inner.scrollLeft = top.scrollLeft; };
+    const onInnerScroll = () => { if (syncingInner.current) { syncingInner.current = false; return; } syncingTop.current = true; top.scrollLeft = inner.scrollLeft; };
+    top.addEventListener('scroll', onTopScroll);
+    inner.addEventListener('scroll', onInnerScroll);
+    return () => { top.removeEventListener('scroll', onTopScroll); inner.removeEventListener('scroll', onInnerScroll); };
+  }, [children]);
+
+  return (
+    <>
+      <div ref={topRef} className="overflow-x-auto" style={{ overflowY: 'hidden', height: 12 }}>
+        <div style={{ height: 1 }} />
+      </div>
+      <div ref={innerRef} className="overflow-x-auto">
+        {children}
+      </div>
+    </>
+  );
+}
 import {
   categoriesAPI,
   invoiceAPI, supplierAPI, taxAPI
@@ -46,10 +78,14 @@ const PaymentTracker: React.FC = () => {
   const { showLoading, hideLoading } = useLoading();
 
   useEffect(() => {
+    fetchUpcomingAlerts();
+  }, []);
+
+  useEffect(() => {
     const loadAll = async () => {
       showLoading('Loading...');
       try {
-        await Promise.all([fetchInvoices(), fetchSuppliers(), fetchUpcomingAlerts(), fetchTaxes(), fetchPayment()]);
+        await Promise.all([fetchInvoices(), fetchSuppliers(), fetchTaxes(), fetchPayment()]);
       } finally {
         hideLoading();
       }
@@ -83,6 +119,7 @@ const PaymentTracker: React.FC = () => {
       today.setHours(0, 0, 0, 0);
       
       if (dateFilter === 'today') {
+        const endOfToday = new Date(today); endOfToday.setHours(23, 59, 59, 999);
         filteredInvoices = filteredInvoices.filter((inv: any) => {
           const invDate = new Date(inv.invoiceDate);
           invDate.setHours(0, 0, 0, 0);
@@ -91,27 +128,32 @@ const PaymentTracker: React.FC = () => {
       } else if (dateFilter === '7days') {
         const sevenDaysAgo = new Date(today);
         sevenDaysAgo.setDate(today.getDate() - 7);
+        const endOfToday = new Date(today); endOfToday.setHours(23, 59, 59, 999);
         filteredInvoices = filteredInvoices.filter((inv: any) => {
           const invDate = new Date(inv.invoiceDate);
-          return invDate >= sevenDaysAgo && invDate <= today;
+          return invDate >= sevenDaysAgo && invDate <= endOfToday;
         });
       } else if (dateFilter === '30days') {
         const thirtyDaysAgo = new Date(today);
         thirtyDaysAgo.setDate(today.getDate() - 30);
+        const endOfToday = new Date(today); endOfToday.setHours(23, 59, 59, 999);
         filteredInvoices = filteredInvoices.filter((inv: any) => {
           const invDate = new Date(inv.invoiceDate);
-          return invDate >= thirtyDaysAgo && invDate <= today;
+          return invDate >= thirtyDaysAgo && invDate <= endOfToday;
         });
       } else if (dateFilter === 'year') {
         const oneYearAgo = new Date(today);
         oneYearAgo.setFullYear(today.getFullYear() - 1);
+        const endOfToday = new Date(today); endOfToday.setHours(23, 59, 59, 999);
         filteredInvoices = filteredInvoices.filter((inv: any) => {
           const invDate = new Date(inv.invoiceDate);
-          return invDate >= oneYearAgo && invDate <= today;
+          return invDate >= oneYearAgo && invDate <= endOfToday;
         });
       } else if (dateFilter === 'custom' && customStartDate && customEndDate) {
         const start = new Date(customStartDate);
+        start.setHours(0, 0, 0, 0);
         const end = new Date(customEndDate);
+        end.setHours(23, 59, 59, 999);
         filteredInvoices = filteredInvoices.filter((inv: any) => {
           const invDate = new Date(inv.invoiceDate);
           return invDate >= start && invDate <= end;
@@ -404,6 +446,20 @@ const PaymentTracker: React.FC = () => {
             <Download size={20} />
             Download CSV
           </button>
+          <button
+            onClick={async () => {
+              showLoading('Syncing checkin invoices...');
+              try {
+                const res = await invoiceAPI.backfillPurchaseInvoices();
+                toast.success(res.data.message);
+                fetchInvoices();
+              } catch { toast.error('Sync failed'); }
+              finally { hideLoading(); }
+            }}
+            className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+          >
+            Sync Check-In
+          </button>
           <button onClick={() => openModal()} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
             <Plus size={20} />
             Add Invoice
@@ -498,6 +554,7 @@ const PaymentTracker: React.FC = () => {
 
       {/* Invoices Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+        <TopScrollbar>
         <div className="overflow-x-auto">
           <table className="w-full min-w-max">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -560,6 +617,7 @@ const PaymentTracker: React.FC = () => {
             </tbody>
           </table>
         </div>
+        </TopScrollbar>
       </div>
 
       {/* Add/Edit Modal */}

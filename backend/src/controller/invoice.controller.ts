@@ -432,10 +432,11 @@ static async autoInvoice(req: any, res: Response, next: NextFunction) {
                 where: {
                     invoiceNumber: invoice_number.trim(),
                     supplierId: supplier_id,
-                    invoiceType: 'checkin'
+                    invoiceType: 'checkin',
+                    locationId,
                 }
             });
-            if (duplicate) { next({ message: 'Invoice exist already exists' }); return; }
+            if (duplicate) { next({ message: 'Invoice already exists' }); return; }
 
             const result = await prisma.$transaction(async (tx) => {
                 let totalQty = 0;
@@ -463,7 +464,7 @@ static async autoInvoice(req: any, res: Response, next: NextFunction) {
 
                 const grandTotal = parseFloat((totalAmount + totalTax).toFixed(2));
 
-                // Create invoice record
+                // Create checkin invoice record
                 const invoice = await tx.invoice.create({
                     data: {
                         invoiceNumber: invoice_number.trim(),
@@ -523,9 +524,89 @@ static async autoInvoice(req: any, res: Response, next: NextFunction) {
                 return { invoice, totalQty, totalAmount, totalTax, grandTotal };
             });
 
+            // Create purchase invoice for Payment Tracker (outside main transaction so checkin is never rolled back)
+            try {
+                const dueDate = new Date(invoice_date);
+                dueDate.setDate(dueDate.getDate() + 30);
+                await prisma.invoice.create({
+                    data: {
+                        invoiceNumber: invoice_number.trim(),
+                        invoiceName: `Checkin - ${invoice_number.trim()}`,
+                        supplierId: supplier_id,
+                        amount: parseFloat(result.totalAmount.toFixed(2)),
+                        invoiceDate: new Date(invoice_date),
+                        dueDate,
+                        locationId,
+                        createdBy: userId,
+                        invoiceType: 'purchase',
+                        status: 'pending',
+                        taxAmount: parseFloat(result.totalTax.toFixed(2)),
+                        totalQuantity: parseFloat(result.totalQty.toFixed(2)),
+                        grandTotal: parseFloat(result.grandTotal.toFixed(2)),
+                    }
+                });
+            } catch (_) { /* purchase invoice already exists or failed — checkin still succeeds */ }
+
             res.status(201).json(result);
         } catch (err: any) {
             if (err.message?.startsWith('Item ')) { res.status(400).json({ message: err.message }); return; }
+            next(err);
+        }
+    }
+
+    static async backfillPurchaseInvoices(req: any, res: Response, next: NextFunction) {
+        try {
+            const locationId = req.headers.location_id as string;
+            const userId = req.user.id as string;
+
+            if (!locationId) { res.status(400).json({ message: 'Location ID required' }); return; }
+
+            // Get all checkin invoices for this location
+            const checkinInvoices = await prisma.invoice.findMany({
+                where: { locationId, invoiceType: 'checkin' }
+            });
+
+            let created = 0;
+            let skipped = 0;
+
+            for (const inv of checkinInvoices) {
+                // Check if a purchase invoice already exists for this invoice number + supplier
+                const exists = await prisma.invoice.findFirst({
+                    where: {
+                        invoiceNumber: inv.invoiceNumber,
+                        supplierId: inv.supplierId,
+                        invoiceType: 'purchase',
+                        locationId,
+                    }
+                });
+
+                if (exists) { skipped++; continue; }
+
+                const dueDate = new Date(inv.invoiceDate);
+                dueDate.setDate(dueDate.getDate() + 30);
+
+                await prisma.invoice.create({
+                    data: {
+                        invoiceNumber: inv.invoiceNumber,
+                        invoiceName: inv.invoiceName,
+                        supplierId: inv.supplierId,
+                        amount: inv.amount,
+                        invoiceDate: inv.invoiceDate,
+                        dueDate,
+                        locationId,
+                        createdBy: userId,
+                        invoiceType: 'purchase',
+                        status: 'pending',
+                        taxAmount: inv.taxAmount,
+                        totalQuantity: inv.totalQuantity,
+                        grandTotal: inv.grandTotal,
+                    }
+                });
+                created++;
+            }
+
+            res.status(200).json({ message: `Backfill complete: ${created} created, ${skipped} already existed` });
+        } catch (err) {
             next(err);
         }
     }

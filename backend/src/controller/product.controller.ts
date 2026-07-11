@@ -187,7 +187,7 @@ export class ProductController {
                 }
 
                 return processedItems;
-            });
+            }, { maxWait: 15000, timeout: 120000 });
 
             res.status(201).json({ items: results, count: results.length });
         } catch (err: any) {
@@ -246,7 +246,7 @@ export class ProductController {
                 }
 
                 return { processedItems, errors };
-            });
+            }, { maxWait: 15000, timeout: 120000 });
 
             res.status(201).json({ items: results.processedItems, count: results.processedItems.length, errors: results.errors });
         } catch (err: any) {

@@ -1,8 +1,8 @@
 import { transporter, mailGenerator } from "../config/email.config";
 import { User } from "../model/user.model";
 import nodeMailer from 'nodemailer';
-const company_name = "ABC Company";
-const domain = "https://inventory-silk-kappa.vercel.app/";
+const company_name = "ILAI ROSENHEIMERSTR";
+const domain = "http://103.235.106.247/";
 export class EmailServices {
 
     static registerEmail(passcode: string, user: User) {
@@ -65,7 +65,7 @@ export class EmailServices {
 const mailSender = async (template: any, subject: string, email: string): Promise<Boolean> => {
     const mail = mailGenerator.generate(template);
     let message = {
-        from: `" ${company_name}" <riplanit@gmail.com>`,
+        from: `" ${company_name}" <inventory.ilai@gmail.com>`,
         to: '<' + email + '>',
         subject: subject,
         html: mail,
@@ -84,7 +84,7 @@ const mailSender = async (template: any, subject: string, email: string): Promis
 const mailSenderWithAttachment = async (template: any, subject: string, email: string, attachment: any): Promise<Boolean> => {
     const mail = mailGenerator.generate(template);
     let message = {
-        from: `" ${company_name}" <riplanit@gmail.com>`,
+        from: `" ${company_name}" <inventory.ilai@gmail.com>`,
         to: '<' + email + '>',
         subject: subject,
         html: mail,

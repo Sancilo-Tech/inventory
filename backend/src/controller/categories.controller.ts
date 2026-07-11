@@ -37,6 +37,31 @@ export class categoriesController {
                 next(err)
             }
     }
+    static async getPaginatedCategories(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { type, page = 1, limit = 10, search } = req.query;
+            const take = Math.min(Number(limit) || 10, 500);
+            const skip = (Math.max(Number(page) || 1, 1) - 1) * take;
+
+            const where: any = {};
+            if (type) where.type = type;
+            if (search && String(search).trim()) {
+                where.typeName = { contains: String(search).trim(), mode: 'insensitive' };
+            }
+
+            const [categories, total] = await Promise.all([
+                prisma.typeMaster.findMany({ where, orderBy: { typeName: 'asc' }, skip, take }),
+                prisma.typeMaster.count({ where }),
+            ]);
+
+            res.json({
+                categories,
+                pagination: { total, page: Number(page), limit: take, totalPages: Math.ceil(total / take) },
+            });
+        } catch (err) {
+            next(err)
+        }
+    }
     static async getCategoriesById(req: Request, res: Response, next: NextFunction) {
         try {
             const id = req.params.categoriesId

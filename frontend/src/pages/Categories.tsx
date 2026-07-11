@@ -4,6 +4,7 @@ import { categoriesAPI } from '../services/api';
 import { useLoading } from '../context/LoadingContext';
 import { toast } from 'react-toastify';
 import SimpleBulkUploadModal from '../components/SimpleBulkUploadModal';
+import Pagination from '../components/Pagination';
 import { parseCategoryFile, downloadCategoryTemplate } from '../utils/excelParser';
 
 interface Category {
@@ -21,22 +22,39 @@ const Categories: React.FC = () => {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [formData, setFormData] = useState({ typeName: '', description: '', type: 'item' as 'item' | 'financial' | 'group' | 'quantityType' | 'paymentType' });
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const { showLoading, hideLoading } = useLoading();
 
-  const filteredCategories = categories
-    .filter((c) => c.typeName.toLowerCase().includes(searchQuery.toLowerCase()))
-    .sort((a, b) => a.typeName.localeCompare(b.typeName));
+  // Clear the search box when switching tabs.
+  useEffect(() => { setSearchQuery(''); }, [activeTab]);
+
+  // Debounce the search box so we query the server at most once per pause.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 400);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  useEffect(() => { setPage(1); }, [activeTab, debouncedSearch, pageSize]);
 
   useEffect(() => {
-    setSearchQuery('');
     fetchCategories();
-  }, [activeTab]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, page, pageSize, debouncedSearch]);
 
   const fetchCategories = async () => {
     try {
-      const response = await categoriesAPI.getTypeCategories(activeTab);
-      setCategories(response.data);
+      const response = await categoriesAPI.getPaginatedCategories({
+        type: activeTab,
+        page,
+        limit: pageSize,
+        search: debouncedSearch || undefined,
+      });
+      setCategories(response.data.categories);
+      setTotal(response.data.pagination.total);
     } catch (error) {
       console.error('Error fetching categories:', error);
     }
@@ -180,8 +198,8 @@ const Categories: React.FC = () => {
         {categories.length === 0 ? (
           <div className="p-8 text-center">
             <Tags className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">No Categories Yet</h2>
-            <p className="text-gray-600">Add your first category to get started.</p>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">{debouncedSearch ? 'No matching categories' : 'No Categories Yet'}</h2>
+            <p className="text-gray-600">{debouncedSearch ? 'Try a different search term.' : 'Add your first category to get started.'}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -194,9 +212,7 @@ const Categories: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {filteredCategories.length === 0 ? (
-                  <tr><td colSpan={3} className="px-6 py-8 text-center text-sm text-gray-500">No categories match your search.</td></tr>
-                ) : filteredCategories.map((category) => (
+                {categories.map((category) => (
                   <tr key={category.typeId} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{category.typeName}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">{category.description || '-'}</td>
@@ -218,6 +234,16 @@ const Categories: React.FC = () => {
               </tbody>
             </table>
           </div>
+        )}
+        {total > 0 && (
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            totalItems={total}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            label="categories"
+          />
         )}
       </div>
 

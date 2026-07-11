@@ -73,6 +73,88 @@ export class InvoiceController {
         }
     }
 
+    // Server-side paginated invoice list with a summary computed over the whole
+    // filtered set (not just the current page). All date math is done by the
+    // caller and passed as explicit ranges to keep the same semantics as before.
+    static async getPaginatedInvoices(req: any, res: Response, next: NextFunction) {
+        try {
+            const locationId = req.headers.location_id;
+            if (!locationId) { res.status(400).json({ message: "Location ID required" }); return; }
+
+            const {
+                type, status, page = 1, limit = 10,
+                invoiceStartDate, invoiceEndDate, dueStartDate, dueEndDate,
+            } = req.query;
+
+            const take = Math.min(Number(limit) || 10, 500);
+            const currentPage = Math.max(Number(page) || 1, 1);
+
+            const where: any = { locationId };
+            if (type) where.invoiceType = type;
+            if (status) where.status = status;
+            if (invoiceStartDate && invoiceEndDate) {
+                where.invoiceDate = { gte: new Date(invoiceStartDate as string), lte: new Date(invoiceEndDate as string) };
+            }
+            if (dueStartDate && dueEndDate) {
+                where.dueDate = { gte: new Date(dueStartDate as string), lte: new Date(dueEndDate as string) };
+            }
+
+            const all = await prisma.invoice.findMany({ where });
+
+            // Summary over the full filtered set.
+            let totalAmount = 0, totalTax = 0;
+            const taxGroups: Record<string, { amount: number; tax: number; total: number }> = {};
+            const addGroup = (pctRaw: any, base: number, tax: number) => {
+                const pct = `${Math.round(Number(pctRaw))}%`;
+                if (!taxGroups[pct]) taxGroups[pct] = { amount: 0, tax: 0, total: 0 };
+                taxGroups[pct].amount += base;
+                taxGroups[pct].tax += tax;
+                taxGroups[pct].total += base + tax;
+            };
+            for (const inv of all) {
+                const amount = Number(inv.amount || 0);
+                const tax = Number(inv.taxAmount || 0);
+                totalAmount += amount;
+                totalTax += tax;
+                const breakdown = inv.taxBreakdown as any[] | null;
+                if (Array.isArray(breakdown) && breakdown.length > 0) {
+                    breakdown.forEach(g => addGroup(g.percent, Number(g.base || 0), Number(g.tax || 0)));
+                } else if (inv.taxPercent) {
+                    addGroup(inv.taxPercent, amount, tax);
+                    if (inv.tax2Percent) addGroup(inv.tax2Percent, 0, Number(inv.tax2Amount || 0));
+                }
+            }
+
+            // Sort: unpaid before paid, due-soon (<=3 days) first, then by days-until-due.
+            const daysUntil = (d: Date) => Math.ceil((new Date(d).getTime() - Date.now()) / 86400000);
+            all.sort((a, b) => {
+                const aPaid = a.status === 'paid', bPaid = b.status === 'paid';
+                if (aPaid && !bPaid) return 1;
+                if (!aPaid && bPaid) return -1;
+                const aDays = daysUntil(a.dueDate), bDays = daysUntil(b.dueDate);
+                if (aDays <= 3 && bDays > 3) return -1;
+                if (aDays > 3 && bDays <= 3) return 1;
+                return aDays - bDays;
+            });
+
+            const total = all.length;
+            const pageItems = all.slice((currentPage - 1) * take, currentPage * take);
+
+            res.status(200).json({
+                invoices: pageItems,
+                pagination: { total, page: currentPage, limit: take, totalPages: Math.ceil(total / take) },
+                summary: {
+                    totalAmount: parseFloat(totalAmount.toFixed(3)),
+                    totalTax: parseFloat(totalTax.toFixed(3)),
+                    totalInclusive: parseFloat((totalAmount + totalTax).toFixed(3)),
+                    taxGroups,
+                },
+            });
+        } catch (err) {
+            next(err);
+        }
+    }
+
     static async updateInvoice(req: any, res: Response, next: NextFunction) {
         try {
             const { invoiceId } = req.params;
@@ -452,8 +534,8 @@ static async autoInvoice(req: any, res: Response, next: NextFunction) {
                     const qty = Number(it.quantity);
                     const rate = Number(it.rate);
                     const taxPct = Number(it.tax_percent ?? item.taxPercent ?? 0);
-                    const taxAmt = parseFloat(((rate * taxPct) / 100).toFixed(2));
-                    const lineTotal = parseFloat((rate + taxAmt).toFixed(2)) * qty;
+                    const taxAmt = parseFloat(((rate * taxPct) / 100).toFixed(3));
+                    const lineTotal = parseFloat((rate + taxAmt).toFixed(3)) * qty;
 
                     totalQty += qty;
                     totalAmount += rate * qty;
@@ -462,7 +544,28 @@ static async autoInvoice(req: any, res: Response, next: NextFunction) {
                     processedItems.push({ item_id: it.item_id, quantity: qty, rate, taxPercent: taxPct, taxAmount: taxAmt, lineTotal, applyNewPrice: it.applyNewPrice !== false, quantityType: item.quantityType, notes: it.notes || '' });
                 }
 
-                const grandTotal = parseFloat((totalAmount + totalTax).toFixed(2));
+                const grandTotal = parseFloat((totalAmount + totalTax).toFixed(3));
+
+                // Segregate tax by rate so a check-in with items on different tax
+                // rates records each tax group separately on the invoice.
+                const taxBreakdown = Object.values(
+                    processedItems.reduce((groups: Record<string, { percent: number; base: number; tax: number; quantity: number }>, it) => {
+                        const key = String(it.taxPercent);
+                        const g = groups[key] || (groups[key] = { percent: it.taxPercent, base: 0, tax: 0, quantity: 0 });
+                        g.base += it.rate * it.quantity;
+                        g.tax += it.taxAmount * it.quantity;
+                        g.quantity += it.quantity;
+                        return groups;
+                    }, {})
+                )
+                    .map((g) => ({
+                        percent: g.percent,
+                        base: parseFloat(g.base.toFixed(3)),
+                        tax: parseFloat(g.tax.toFixed(3)),
+                        total: parseFloat((g.base + g.tax).toFixed(3)),
+                        quantity: parseFloat(g.quantity.toFixed(3)),
+                    }))
+                    .sort((a, b) => a.percent - b.percent);
 
                 // Create checkin invoice record
                 const invoice = await tx.invoice.create({
@@ -470,16 +573,17 @@ static async autoInvoice(req: any, res: Response, next: NextFunction) {
                         invoiceNumber: invoice_number.trim(),
                         invoiceName: `Checkin - ${invoice_number.trim()}`,
                         supplierId: supplier_id,
-                        amount: parseFloat(totalAmount.toFixed(2)),
+                        amount: parseFloat(totalAmount.toFixed(3)),
                         invoiceDate: new Date(invoice_date),
                         dueDate: new Date(invoice_date),
                         locationId,
                         createdBy: userId,
                         invoiceType: 'checkin',
                         status: 'paid',
-                        taxAmount: parseFloat(totalTax.toFixed(2)),
-                        totalQuantity: parseFloat(totalQty.toFixed(2)),
+                        taxAmount: parseFloat(totalTax.toFixed(3)),
+                        totalQuantity: parseFloat(totalQty.toFixed(3)),
                         grandTotal,
+                        taxBreakdown,
                     }
                 });
 
@@ -521,8 +625,8 @@ static async autoInvoice(req: any, res: Response, next: NextFunction) {
                     });
                 }
 
-                return { invoice, totalQty, totalAmount, totalTax, grandTotal };
-            });
+                return { invoice, totalQty, totalAmount, totalTax, grandTotal, taxBreakdown };
+            }, { maxWait: 15000, timeout: 120000 });
 
             // Create purchase invoice for Payment Tracker (outside main transaction so checkin is never rolled back)
             try {
@@ -533,16 +637,17 @@ static async autoInvoice(req: any, res: Response, next: NextFunction) {
                         invoiceNumber: invoice_number.trim(),
                         invoiceName: `Checkin - ${invoice_number.trim()}`,
                         supplierId: supplier_id,
-                        amount: parseFloat(result.totalAmount.toFixed(2)),
+                        amount: parseFloat(result.totalAmount.toFixed(3)),
                         invoiceDate: new Date(invoice_date),
                         dueDate,
                         locationId,
                         createdBy: userId,
                         invoiceType: 'purchase',
                         status: 'pending',
-                        taxAmount: parseFloat(result.totalTax.toFixed(2)),
-                        totalQuantity: parseFloat(result.totalQty.toFixed(2)),
-                        grandTotal: parseFloat(result.grandTotal.toFixed(2)),
+                        taxAmount: parseFloat(result.totalTax.toFixed(3)),
+                        totalQuantity: parseFloat(result.totalQty.toFixed(3)),
+                        grandTotal: parseFloat(result.grandTotal.toFixed(3)),
+                        taxBreakdown: result.taxBreakdown,
                     }
                 });
             } catch (_) { /* purchase invoice already exists or failed — checkin still succeeds */ }
@@ -600,6 +705,7 @@ static async autoInvoice(req: any, res: Response, next: NextFunction) {
                         taxAmount: inv.taxAmount,
                         totalQuantity: inv.totalQuantity,
                         grandTotal: inv.grandTotal,
+                        taxBreakdown: inv.taxBreakdown ?? undefined,
                     }
                 });
                 created++;
@@ -646,9 +752,30 @@ static async autoInvoice(req: any, res: Response, next: NextFunction) {
                     quantity: Number(t.quantity),
                     rate: Number(t.price),
                     taxPercent: Number(t.item.taxPercent ?? 0),
-                    taxAmount: parseFloat(((Number(t.price) * Number(t.item.taxPercent ?? 0)) / 100).toFixed(2)),
-                    totalAmount: parseFloat((Number(t.price) * (1 + Number(t.item.taxPercent ?? 0) / 100) * Number(t.quantity)).toFixed(2)),
+                    taxAmount: parseFloat(((Number(t.price) * Number(t.item.taxPercent ?? 0)) / 100 * Number(t.quantity)).toFixed(3)),
+                    totalAmount: parseFloat((Number(t.price) * (1 + Number(t.item.taxPercent ?? 0) / 100) * Number(t.quantity)).toFixed(3)),
                 }));
+
+                // Prefer the tax breakdown persisted at check-in; fall back to
+                // recomputing it from the transaction-log line items.
+                const taxGroups = (inv.taxBreakdown as any[] | null) ?? Object.values(
+                    lineItems.reduce((groups: Record<string, { percent: number; base: number; tax: number; quantity: number }>, li) => {
+                        const key = String(li.taxPercent);
+                        const g = groups[key] || (groups[key] = { percent: li.taxPercent, base: 0, tax: 0, quantity: 0 });
+                        g.base += li.rate * li.quantity;
+                        g.tax += li.taxAmount;
+                        g.quantity += li.quantity;
+                        return groups;
+                    }, {})
+                )
+                    .map((g) => ({
+                        percent: g.percent,
+                        base: parseFloat(g.base.toFixed(3)),
+                        tax: parseFloat(g.tax.toFixed(3)),
+                        total: parseFloat((g.base + g.tax).toFixed(3)),
+                        quantity: parseFloat(g.quantity.toFixed(3)),
+                    }))
+                    .sort((a, b) => a.percent - b.percent);
 
                 return {
                     invoiceId: inv.invoiceId,
@@ -659,6 +786,7 @@ static async autoInvoice(req: any, res: Response, next: NextFunction) {
                     totalAmount: Number(inv.amount),
                     totalTax: Number(inv.taxAmount ?? 0),
                     grandTotal: Number(inv.grandTotal ?? 0),
+                    taxGroups,
                     lineItems,
                 };
             }));

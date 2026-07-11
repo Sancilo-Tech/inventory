@@ -10,6 +10,7 @@ route.use(authMiddleware);
 
 route.post("/create",asyncHandler(SupplierController.createSupplier));
 route.get("/all", asyncHandler(SupplierController.getAllSuppliers));
+route.get("/paginated", asyncHandler(SupplierController.getPaginatedSuppliers));
 route.get("/:supplierId", asyncHandler(SupplierController.getSupplierById));
 route.put("/update/:supplierId", asyncHandler(SupplierController.updateSupplier));
 route.delete("/delete/:supplierId", asyncHandler(SupplierController.deleteSupplier));

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/immutability */
-import React, { useState, useEffect, useRef, useMemo } from "react";
-import { Search, ArrowDownCircle, Printer, X, Trash2, ShoppingCart, AlertTriangle } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { ArrowDownCircle, Printer, X, Trash2, ShoppingCart, AlertTriangle } from "lucide-react";
 import { itemAPI, productAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useLocation } from "../context/LocationContext";
@@ -9,6 +9,7 @@ import { useLoading } from "../context/LoadingContext";
 import { toast } from "react-toastify";
 import { calcPricing, isPriceChanged } from "../utils/pricing";
 import FinalizeCheckinModal from "../components/FinalizeCheckinModal";
+import ItemSearchAutocomplete from "../components/ItemSearchAutocomplete";
 
 interface ItemMaster {
   itemId: string;
@@ -34,14 +35,12 @@ interface ScannedItem extends ItemMaster {
 }
 
 const CheckIn: React.FC = () => {
-  const [searchValue, setSearchValue] = useState("");
   const [allItems, setAllItems] = useState<ItemMaster[]>([]);
   const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
   const [showBill, setShowBill] = useState(false);
   const [billData, setBillData] = useState<any>(null);
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [todayStats, setTodayStats] = useState({ checkInCount: 0, checkOutCount: 0 });
-  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useAuth();
   useLocation();
@@ -64,23 +63,9 @@ const CheckIn: React.FC = () => {
     } catch { /* silent */ }
   };
 
-  const handleSearch = (value?: string) => {
-    const query = (value ?? searchValue).trim().toLowerCase();
-    if (!query) { toast.error("Please enter item code or barcode"); return; }
-
-    const item = allItems.find(
-      i => i.itemCode.toLowerCase() === query || (i.barcode && i.barcode.toLowerCase() === query)
-    );
-
-    if (item) {
-      addItemToBatch(item);
-      setSearchValue("");
-      toast.success("Item added");
-    } else {
-      toast.error("Item not found");
-      setSearchValue("");
-    }
-    searchInputRef.current?.focus();
+  const handleSelectItem = (item: ItemMaster) => {
+    addItemToBatch(item);
+    toast.success("Item added");
   };
 
   const addItemToBatch = (item: ItemMaster) => {
@@ -152,24 +137,8 @@ const CheckIn: React.FC = () => {
         {/* Search panel */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Scan / Search Item</h2>
-          <div className="space-y-3">
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchValue}
-              onChange={e => { const v = e.target.value; setSearchValue(v); if (v.length > 10) handleSearch(v); }}
-              onKeyPress={e => e.key === "Enter" && handleSearch()}
-              placeholder="Enter Item Code or Barcode"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              autoFocus
-            />
-            <button
-              onClick={() => handleSearch()}
-              className="w-full bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
-            >
-              <Search size={20} /> Search
-            </button>
-          </div>
+          <ItemSearchAutocomplete items={allItems} onSelect={handleSelectItem} color="green" />
+          <p className="mt-2 text-xs text-gray-400">Scan a barcode, or type an item code / name and pick from the list.</p>
 
           {/* Grand total summary */}
           {scannedItems.length > 0 && (

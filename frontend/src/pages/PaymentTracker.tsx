@@ -40,9 +40,14 @@ import {
 } from '../services/api';
 import { useLoading } from '../context/LoadingContext';
 import { toast } from 'react-toastify';
+import Pagination from '../components/Pagination';
 
 const PaymentTracker: React.FC = () => {
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<{ totalAmount: number; totalTax: number; totalInclusive: number; taxGroups: Record<string, { amount: number; tax: number; total: number }> } | null>(null);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [taxes, setTaxes] = useState<any[]>([]);
   const [filter, setFilter] = useState<'all' | 'pending' | 'paid' | 'overdue' | 'due_soon'>('due_soon');
@@ -81,17 +86,25 @@ const PaymentTracker: React.FC = () => {
     fetchUpcomingAlerts();
   }, []);
 
+  // Lookups load once.
   useEffect(() => {
-    const loadAll = async () => {
+    fetchSuppliers();
+    fetchTaxes();
+    fetchPayment();
+  }, []);
+
+  // Reset to first page when the filters change (but not when only the page does).
+  useEffect(() => { setPage(1); }, [filter, dateFilter, customStartDate, customEndDate, pageSize]);
+
+  // Load the current page from the server whenever paging or filters change.
+  useEffect(() => {
+    const run = async () => {
       showLoading('Loading...');
-      try {
-        await Promise.all([fetchInvoices(), fetchSuppliers(), fetchTaxes(), fetchPayment()]);
-      } finally {
-        hideLoading();
-      }
+      try { await fetchInvoices(); } finally { hideLoading(); }
     };
-    loadAll();
-  }, [filter, dateFilter, customStartDate, customEndDate]);
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, dateFilter, customStartDate, customEndDate, page, pageSize]);
 
   const fetchTaxes = async () => {
     try {
@@ -102,84 +115,58 @@ const PaymentTracker: React.FC = () => {
     }
   };
 
+  // Translate the current filter/date selection into server query params.
+  // Date math stays here so the semantics match the previous client behaviour.
+  const buildInvoiceParams = () => {
+    const params: any = { type: 'purchase' };
+    if (filter === 'due_soon') params.status = 'pending';
+    else if (filter !== 'all') params.status = filter;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const endOfToday = new Date(today); endOfToday.setHours(23, 59, 59, 999);
+
+    if (dateFilter === 'today') {
+      params.invoiceStartDate = today.toISOString();
+      params.invoiceEndDate = endOfToday.toISOString();
+    } else if (dateFilter === '7days') {
+      const start = new Date(today); start.setDate(today.getDate() - 7);
+      params.invoiceStartDate = start.toISOString();
+      params.invoiceEndDate = endOfToday.toISOString();
+    } else if (dateFilter === '30days') {
+      const start = new Date(today); start.setDate(today.getDate() - 30);
+      params.invoiceStartDate = start.toISOString();
+      params.invoiceEndDate = endOfToday.toISOString();
+    } else if (dateFilter === 'year') {
+      const start = new Date(today); start.setFullYear(today.getFullYear() - 1);
+      params.invoiceStartDate = start.toISOString();
+      params.invoiceEndDate = endOfToday.toISOString();
+    } else if (dateFilter === 'custom' && customStartDate && customEndDate) {
+      const start = new Date(customStartDate); start.setHours(0, 0, 0, 0);
+      const end = new Date(customEndDate); end.setHours(23, 59, 59, 999);
+      params.invoiceStartDate = start.toISOString();
+      params.invoiceEndDate = end.toISOString();
+    }
+
+    if (filter === 'due_soon') {
+      const threeDaysLater = new Date(today); threeDaysLater.setDate(today.getDate() + 3);
+      threeDaysLater.setHours(23, 59, 59, 999);
+      params.dueStartDate = today.toISOString();
+      params.dueEndDate = threeDaysLater.toISOString();
+    }
+    return params;
+  };
+
   const fetchInvoices = async () => {
     try {
-      const params: any = { type: "purchase" };
-      if (filter === 'due_soon') {
-        params.status = 'pending';
-      } else if (filter !== 'all') {
-        params.status = filter;
-      }
-      
-      const response = await invoiceAPI.getAllInvoices(params);
-      let filteredInvoices = response.data;
-      
-      // Apply date filter
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      if (dateFilter === 'today') {
-        const endOfToday = new Date(today); endOfToday.setHours(23, 59, 59, 999);
-        filteredInvoices = filteredInvoices.filter((inv: any) => {
-          const invDate = new Date(inv.invoiceDate);
-          invDate.setHours(0, 0, 0, 0);
-          return invDate.getTime() === today.getTime();
-        });
-      } else if (dateFilter === '7days') {
-        const sevenDaysAgo = new Date(today);
-        sevenDaysAgo.setDate(today.getDate() - 7);
-        const endOfToday = new Date(today); endOfToday.setHours(23, 59, 59, 999);
-        filteredInvoices = filteredInvoices.filter((inv: any) => {
-          const invDate = new Date(inv.invoiceDate);
-          return invDate >= sevenDaysAgo && invDate <= endOfToday;
-        });
-      } else if (dateFilter === '30days') {
-        const thirtyDaysAgo = new Date(today);
-        thirtyDaysAgo.setDate(today.getDate() - 30);
-        const endOfToday = new Date(today); endOfToday.setHours(23, 59, 59, 999);
-        filteredInvoices = filteredInvoices.filter((inv: any) => {
-          const invDate = new Date(inv.invoiceDate);
-          return invDate >= thirtyDaysAgo && invDate <= endOfToday;
-        });
-      } else if (dateFilter === 'year') {
-        const oneYearAgo = new Date(today);
-        oneYearAgo.setFullYear(today.getFullYear() - 1);
-        const endOfToday = new Date(today); endOfToday.setHours(23, 59, 59, 999);
-        filteredInvoices = filteredInvoices.filter((inv: any) => {
-          const invDate = new Date(inv.invoiceDate);
-          return invDate >= oneYearAgo && invDate <= endOfToday;
-        });
-      } else if (dateFilter === 'custom' && customStartDate && customEndDate) {
-        const start = new Date(customStartDate);
-        start.setHours(0, 0, 0, 0);
-        const end = new Date(customEndDate);
-        end.setHours(23, 59, 59, 999);
-        filteredInvoices = filteredInvoices.filter((inv: any) => {
-          const invDate = new Date(inv.invoiceDate);
-          return invDate >= start && invDate <= end;
-        });
-      }
-      
-      if (filter === 'due_soon') {
-        const threeDaysLater = new Date();
-        threeDaysLater.setDate(today.getDate() + 3);
-        filteredInvoices = filteredInvoices.filter((inv: any) => {
-          const dueDate = new Date(inv.dueDate);
-          return dueDate >= today && dueDate <= threeDaysLater;
-        });
-      }
-      
-      filteredInvoices.sort((a: any, b: any) => {
-        const aDays = getDaysUntilDue(a.dueDate);
-        const bDays = getDaysUntilDue(b.dueDate);
-        if (a.status === 'paid' && b.status !== 'paid') return 1;
-        if (a.status !== 'paid' && b.status === 'paid') return -1;
-        if (aDays <= 3 && bDays > 3) return -1;
-        if (aDays > 3 && bDays <= 3) return 1;
-        return aDays - bDays;
+      const response = await invoiceAPI.getPaginatedInvoices({
+        ...buildInvoiceParams(),
+        page,
+        limit: pageSize,
       });
-      
-      setInvoices(filteredInvoices);
+      setInvoices(response.data.invoices);
+      setTotal(response.data.pagination.total);
+      setSummary(response.data.summary);
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to load invoices');
     }
@@ -352,13 +339,27 @@ const PaymentTracker: React.FC = () => {
     return diffDays;
   };
 
-  const downloadCSV = () => {
-    if (invoices.length === 0) {
+  const downloadCSV = async () => {
+    if (total === 0) {
       toast.error('No data to download');
       return;
     }
 
-    const data = invoices.map(invoice => ({
+    // The table shows one page; export every invoice matching the current filters.
+    let rows: any[] = [];
+    showLoading('Preparing CSV...');
+    try {
+      const res = await invoiceAPI.getPaginatedInvoices({ ...buildInvoiceParams(), page: 1, limit: 100000 });
+      rows = res.data.invoices;
+    } catch {
+      toast.error('Failed to prepare CSV');
+      hideLoading();
+      return;
+    } finally {
+      hideLoading();
+    }
+
+    const data = rows.map(invoice => ({
       'Invoice Number': invoice.invoiceNumber,
       'Invoice Name': invoice.invoiceName,
       'Supplier': suppliers.find(s => s.supplierId === invoice.supplierId)?.supplierName || '-',
@@ -373,6 +374,8 @@ const PaymentTracker: React.FC = () => {
       'Paid Date': invoice.paidDate ? new Date(invoice.paidDate).toLocaleDateString() : '-',
       'Notes': invoice.notes || '-'
     }));
+
+    if (data.length === 0) { toast.error('No data to download'); return; }
 
     const headers = Object.keys(data[0]);
     const csv = [
@@ -507,50 +510,35 @@ const PaymentTracker: React.FC = () => {
         </div>
       </div>
 
-      {/* Totals Summary */}
-      {invoices.length > 0 && (() => {
-        const totalAmount = invoices.reduce((s, inv) => s + parseFloat(inv.amount || 0), 0);
-        const totalTax = invoices.reduce((s, inv) => s + parseFloat(inv.taxAmount || 0), 0);
-        const totalInclusive = totalAmount + totalTax;
-        const taxGroups: Record<string, { amount: number; tax: number; total: number }> = {};
-        invoices.forEach(inv => {
-          if (inv.taxPercent) {
-            const pct = parseFloat(inv.taxPercent).toFixed(0) + '%';
-            if (!taxGroups[pct]) taxGroups[pct] = { amount: 0, tax: 0, total: 0 };
-            taxGroups[pct].amount += parseFloat(inv.amount || 0);
-            taxGroups[pct].tax += parseFloat(inv.taxAmount || 0);
-            taxGroups[pct].total += parseFloat(inv.amount || 0) + parseFloat(inv.taxAmount || 0);
-          }
-        });
-        return (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
-            <div className="flex flex-wrap gap-6 items-center">
-              <div className="flex flex-col">
-                <span className="text-xs text-gray-500 uppercase">Total Amount</span>
-                <span className="text-base font-bold text-gray-900">€{totalAmount.toFixed(2)}</span>
-              </div>
-              <div className="w-px h-8 bg-gray-200" />
-              <div className="flex flex-col">
-                <span className="text-xs text-gray-500 uppercase">Total Tax</span>
-                <span className="text-base font-bold text-orange-600">€{totalTax.toFixed(2)}</span>
-              </div>
-              <div className="w-px h-8 bg-gray-200" />
-              <div className="flex flex-col">
-                <span className="text-xs text-gray-500 uppercase">Total (incl. Tax)</span>
-                <span className="text-base font-bold text-blue-700">€{totalInclusive.toFixed(2)}</span>
-              </div>
-              {Object.keys(taxGroups).length > 0 && <div className="w-px h-8 bg-gray-200" />}
-              {Object.entries(taxGroups).sort(([a], [b]) => parseFloat(a) - parseFloat(b)).map(([pct, vals]) => (
-                <div key={pct} className="flex flex-col bg-gray-50 rounded-lg px-3 py-1">
-                  <span className="text-xs text-gray-500 uppercase">Tax {pct} Group</span>
-                  <span className="text-sm text-gray-800">Total: €{vals.total.toFixed(2)}</span>
-                  <span className="text-xs text-gray-500">Base: €{vals.amount.toFixed(2)} · Tax: <span className="font-bold text-orange-600 text-base bg-orange-50 px-1 rounded">€{vals.tax.toFixed(2)}</span></span>
-                </div>
-              ))}
+      {/* Totals Summary — computed by the server over the whole filtered set */}
+      {summary && total > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+          <div className="flex flex-wrap gap-6 items-center">
+            <div className="flex flex-col">
+              <span className="text-xs text-gray-500 uppercase">Total Amount</span>
+              <span className="text-base font-bold text-gray-900">€{summary.totalAmount.toFixed(3)}</span>
             </div>
+            <div className="w-px h-8 bg-gray-200" />
+            <div className="flex flex-col">
+              <span className="text-xs text-gray-500 uppercase">Total Tax</span>
+              <span className="text-base font-bold text-orange-600">€{summary.totalTax.toFixed(3)}</span>
+            </div>
+            <div className="w-px h-8 bg-gray-200" />
+            <div className="flex flex-col">
+              <span className="text-xs text-gray-500 uppercase">Total (incl. Tax)</span>
+              <span className="text-base font-bold text-blue-700">€{summary.totalInclusive.toFixed(3)}</span>
+            </div>
+            {Object.keys(summary.taxGroups).length > 0 && <div className="w-px h-8 bg-gray-200" />}
+            {Object.entries(summary.taxGroups).sort(([a], [b]) => parseFloat(a) - parseFloat(b)).map(([pct, vals]) => (
+              <div key={pct} className="flex flex-col bg-gray-50 rounded-lg px-3 py-1">
+                <span className="text-xs text-gray-500 uppercase">Tax {pct} Group</span>
+                <span className="text-sm text-gray-800">Total: €{vals.total.toFixed(3)}</span>
+                <span className="text-xs text-gray-500">Base: €{vals.amount.toFixed(3)} · Tax: <span className="font-bold text-orange-600 text-base bg-orange-50 px-1 rounded">€{vals.tax.toFixed(3)}</span></span>
+              </div>
+            ))}
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {/* Invoices Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
@@ -578,15 +566,26 @@ const PaymentTracker: React.FC = () => {
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">{invoice.invoiceNumber?.startsWith('DRAFT-') ? <span className="text-gray-400 italic">-</span> : invoice.invoiceNumber}</td>
                   <td className="px-6 py-4 text-sm text-gray-900">{invoice.invoiceName}</td>
                   <td className="px-6 py-4 text-sm text-gray-900">
-                    €{parseFloat(invoice.amount).toFixed(2)}
+                    €{parseFloat(invoice.amount).toFixed(3)}
                   </td>
                   <td className="px-6 py-4 text-sm text-orange-600">
-                    {invoice.taxAmount ? `€${parseFloat(invoice.taxAmount).toFixed(2)}` : "-"}
-                    {invoice.taxPercent ? <span className="block text-xs text-gray-400">{parseFloat(invoice.taxPercent).toFixed(0)}%</span> : null}
-                    {invoice.tax2Amount ? <span className="block text-xs text-orange-400">+€{parseFloat(invoice.tax2Amount).toFixed(2)} ({parseFloat(invoice.tax2Percent).toFixed(0)}%)</span> : null}
+                    {Array.isArray(invoice.taxBreakdown) && invoice.taxBreakdown.length > 0 ? (
+                      invoice.taxBreakdown.map((g: any, idx: number) => (
+                        <span key={idx} className="block">
+                          €{parseFloat(g.tax).toFixed(3)}
+                          <span className="text-xs text-gray-400"> ({parseFloat(g.percent).toFixed(0)}%)</span>
+                        </span>
+                      ))
+                    ) : (
+                      <>
+                        {invoice.taxAmount ? `€${parseFloat(invoice.taxAmount).toFixed(3)}` : "-"}
+                        {invoice.taxPercent ? <span className="block text-xs text-gray-400">{parseFloat(invoice.taxPercent).toFixed(0)}%</span> : null}
+                        {invoice.tax2Amount ? <span className="block text-xs text-orange-400">+€{parseFloat(invoice.tax2Amount).toFixed(3)} ({parseFloat(invoice.tax2Percent).toFixed(0)}%)</span> : null}
+                      </>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                    €{(parseFloat(invoice.amount) + parseFloat(invoice.taxAmount || 0) + parseFloat(invoice.tax2Amount || 0)).toFixed(2)}
+                    €{(parseFloat(invoice.amount) + parseFloat(invoice.taxAmount || 0) + parseFloat(invoice.tax2Amount || 0)).toFixed(3)}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600">{new Date(invoice.invoiceDate).toLocaleDateString()}</td>
                   <td className="px-6 py-4 text-sm text-gray-600">{new Date(invoice.dueDate).toLocaleDateString()}</td>
@@ -618,6 +617,16 @@ const PaymentTracker: React.FC = () => {
           </table>
         </div>
         </TopScrollbar>
+        {total > 0 && (
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            totalItems={total}
+            onPageChange={setPage}
+            onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
+            label="invoices"
+          />
+        )}
       </div>
 
       {/* Add/Edit Modal */}

@@ -9,6 +9,7 @@ route.use(authMiddleware);
 
 route.post("/create", asyncHandler(InvoiceController.createInvoice));
 route.get("/all", asyncHandler(InvoiceController.getAllInvoices));
+route.get("/paginated", asyncHandler(InvoiceController.getPaginatedInvoices));
 route.put("/update/:invoiceId", asyncHandler(InvoiceController.updateInvoice));
 route.put("/mark-paid/:invoiceId", asyncHandler(InvoiceController.markAsPaid));
 route.delete("/delete/:invoiceId", asyncHandler(InvoiceController.deleteInvoice));

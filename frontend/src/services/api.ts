@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import axios from 'axios';
 
-//const API_BASE_URL = 'http://localhost:5000/api';
-const API_BASE_URL = 'http://103.235.106.247:5000/api';
+const API_BASE_URL = 'http://localhost:5000/api';
+// const API_BASE_URL = 'http://103.235.106.247:5000/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -65,6 +65,7 @@ export const authAPI = {
 
 export const userAPI = {
   getUsers: () => api.get('/user/get-all-users'),
+  getPaginatedUsers: (params?: any) => api.get('/user/paginated', { params }),
   getUserById: (userId: string) => api.get(`/user/get-user/${userId}`),
   updateUser: (userId: string, data: any) => api.put(`/user/update-user/${userId}`, data),
   deleteUser: (userId: string) => api.delete(`/user/delete-user/${userId}`),
@@ -84,6 +85,7 @@ export const locationAPI = {
 
 export const supplierAPI = {
   getSuppliers: () => api.get('/supplier/all'),
+  getPaginatedSuppliers: (params?: any) => api.get('/supplier/paginated', { params }),
   getSupplierById: (supplierId: string) => api.get(`/supplier/${supplierId}`),
   createSupplier: (data: any) => api.post('/supplier/create', data),
   updateSupplier: (supplierId: string, data: any) => api.put(`/supplier/update/${supplierId}`, data),
@@ -102,6 +104,7 @@ export const taxAPI = {
 
 export const itemAPI = {
   getItems: () => api.get('/item/all'),
+  getPaginatedItems: (params?: any) => api.get('/item/paginated', { params }),
   getItemById: (itemId: string) => api.get(`/item/get-by-id/${itemId}`),
   getItemByBarcode: (barcode: string) => api.get(`/item/barcode/${barcode}`),
   getItemByCode: (itemCode: string) => api.get(`/item/code/${itemCode}`),
@@ -116,6 +119,7 @@ export const itemAPI = {
 export const categoriesAPI = {
   getCategories: () => api.get('/categories/all'),
   getTypeCategories:(type:string)=>api.get(`/categories/get?type=${type}`),
+  getPaginatedCategories: (params?: any) => api.get('/categories/paginated', { params }),
   getCategoryById: (categoriesId: string) => api.get(`/categories/get-by-id/${categoriesId}`),
   createCategory: (data: any) => api.post('/categories/create', data),
   updateCategory: (categoriesId: string, data: any) => api.put(`/categories/update/${categoriesId}`, data),
@@ -151,6 +155,7 @@ export const reportAPI = {
 export const invoiceAPI = {
   createInvoice: (data: any) => api.post('/invoice/create', data),
   getAllInvoices: (params?: any) => api.get('/invoice/all', { params }),
+  getPaginatedInvoices: (params?: any) => api.get('/invoice/paginated', { params }),
   updateInvoice: (invoiceId: string, data: any) => api.put(`/invoice/update/${invoiceId}`, data),
   markAsPaid: (invoiceId: string, data: any) => api.put(`/invoice/mark-paid/${invoiceId}`, data),
   deleteInvoice: (invoiceId: string) => api.delete(`/invoice/delete/${invoiceId}`),

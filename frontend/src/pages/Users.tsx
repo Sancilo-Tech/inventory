@@ -9,11 +9,13 @@ import {
   MapPin,
   Eye,
   KeyRound,
+  Search,
 } from "lucide-react";
 import { userAPI, authAPI, locationAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useLoading } from "../context/LoadingContext";
 import { toast } from "react-toastify";
+import Pagination from "../components/Pagination";
 
 interface Location {
   locationId: string;
@@ -55,25 +57,39 @@ const UsersPage: React.FC = () => {
     location_ids: [] as string[],
   });
   const [tempPassword, setTempPassword] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
   const { user: currentUser } = useAuth();
   const { showLoading, hideLoading } = useLoading();
 
+  // Locations only need to load once.
+  useEffect(() => { fetchLocations(); }, []);
+
+  // Debounce the search box so we query the server at most once per pause.
   useEffect(() => {
-    const loadAll = async () => {
-      showLoading('Loading users...');
-      try {
-        await Promise.all([fetchUsers(), fetchLocations()]);
-      } finally {
-        hideLoading();
-      }
-    };
-    loadAll();
-  }, []);
+    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 400);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  useEffect(() => { setPage(1); }, [debouncedSearch, pageSize]);
+
+  useEffect(() => {
+    fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize, debouncedSearch]);
 
   const fetchUsers = async () => {
     try {
-      const response = await userAPI.getUsers();
-      setUsers(response.data);
+      const response = await userAPI.getPaginatedUsers({
+        page,
+        limit: pageSize,
+        search: debouncedSearch || undefined,
+      });
+      setUsers(response.data.users);
+      setTotal(response.data.pagination.total);
     } catch (error) {
       console.error("Error fetching users:", error);
     }
@@ -228,15 +244,26 @@ const UsersPage: React.FC = () => {
         )}
       </div>
 
+      <div className="relative my-4">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Search by name, email or phone..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+        />
+      </div>
+
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
         {users.length === 0 ? (
           <div className="p-8 text-center">
             <UsersIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              No Users Yet
+              {debouncedSearch ? 'No matching users' : 'No Users Yet'}
             </h2>
             <p className="text-gray-600">
-              Users will appear here once created.
+              {debouncedSearch ? 'Try a different search term.' : 'Users will appear here once created.'}
             </p>
           </div>
         ) : (
@@ -332,6 +359,16 @@ const UsersPage: React.FC = () => {
               </tbody>
             </table>
           </div>
+        )}
+        {total > 0 && (
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            totalItems={total}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            label="users"
+          />
         )}
       </div>
 

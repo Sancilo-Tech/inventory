@@ -9,6 +9,7 @@ route.use(authMiddleware);
 
 route.post("/create", asyncHandler(ItemController.addItem));
 route.get("/all", asyncHandler(ItemController.getAllItem));
+route.get("/paginated", asyncHandler(ItemController.getPaginatedItems));
 route.get("/get-by-id/:itemId", asyncHandler(ItemController.getItemById));
 route.get("/barcode/:barcode", asyncHandler(ItemController.getItemByBarcode));
 route.get("/code/:itemCode", asyncHandler(ItemController.getItemByCode));

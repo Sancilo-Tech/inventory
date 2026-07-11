@@ -106,6 +106,50 @@ export class ItemController {
         }
     }
 
+    static async getPaginatedItems(req: any, res: Response, next: NextFunction) {
+        try {
+            const locationId = req.headers.location_id;
+            if (!locationId) {
+                res.status(400).json({ message: "Location ID required" });
+                return;
+            }
+
+            const { page = 1, limit = 10, search, supplierId, groupName } = req.query;
+            const take = Math.min(Number(limit) || 10, 500);
+            const skip = (Math.max(Number(page) || 1, 1) - 1) * take;
+
+            const where: any = { locationId, isDisable: false };
+            if (supplierId) where.supplierId = supplierId;
+            if (groupName) where.groupName = groupName;
+            if (search && String(search).trim()) {
+                const q = String(search).trim();
+                where.OR = [
+                    { itemName: { contains: q, mode: 'insensitive' } },
+                    { itemCode: { contains: q, mode: 'insensitive' } },
+                    { barcode: { contains: q, mode: 'insensitive' } },
+                ];
+            }
+
+            const [items, total] = await Promise.all([
+                prisma.itemMaster.findMany({
+                    where,
+                    include: { location: true, supplier: true, type: true, tax: true, group: true },
+                    orderBy: { itemCode: 'asc' },
+                    skip,
+                    take,
+                }),
+                prisma.itemMaster.count({ where }),
+            ]);
+
+            res.status(200).json({
+                items,
+                pagination: { total, page: Number(page), limit: take, totalPages: Math.ceil(total / take) },
+            });
+        } catch (err) {
+            next(err);
+        }
+    }
+
     static async getItemById(req: any, res: Response, next: NextFunction) {
         try {
              const locationId = req.headers.location_id;

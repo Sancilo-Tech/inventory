@@ -25,6 +25,36 @@ export class UserController {
         }
     }
 
+    static async getPaginated(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { page = 1, limit = 10, search } = req.query;
+            const take = Math.min(Number(limit) || 10, 500);
+            const skip = (Math.max(Number(page) || 1, 1) - 1) * take;
+
+            const where: any = {};
+            if (search && String(search).trim()) {
+                const q = String(search).trim();
+                where.OR = [
+                    { fullName: { contains: q, mode: 'insensitive' } },
+                    { email: { contains: q, mode: 'insensitive' } },
+                    { phone: { contains: q, mode: 'insensitive' } },
+                ];
+            }
+
+            const [users, total] = await Promise.all([
+                prisma.user.findMany({ where, orderBy: { role: 'asc' }, skip, take }),
+                prisma.user.count({ where }),
+            ]);
+
+            res.json({
+                users,
+                pagination: { total, page: Number(page), limit: take, totalPages: Math.ceil(total / take) },
+            });
+        } catch (e) {
+            next(e);
+        }
+    }
+
     static async updateUser(req: Request, res: Response, next: NextFunction) {
         try {
             const userId = req.params.userId;

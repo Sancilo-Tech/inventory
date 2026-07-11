@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Package,
   Plus,
@@ -24,6 +24,7 @@ import { toast } from "react-toastify";
 import BarcodeComponent from "../components/BarcodeComponent";
 import { generateBarcodeSheet } from "../utils/BarcodeSheetGenerator";
 import BulkUploadModal from "../components/BulkUploadModal";
+import Pagination from "../components/Pagination";
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import JsBarcode from 'jsbarcode';
@@ -151,6 +152,10 @@ const Items: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSupplier, setSelectedSupplier] = useState('');
   const [selectedGroup, setSelectedGroup] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [itemCodeExists, setItemCodeExists] = useState(false);
   const [formData, setFormData] = useState(defaultFormData);
@@ -159,49 +164,45 @@ const Items: React.FC = () => {
   const selectedLocation = localStorage.getItem('selectedLocation');
   const locationId = selectedLocation ? JSON.parse(selectedLocation).locationId : '';
 
-  const filteredItems = useMemo(() => {
-    let result = items;
-    if (selectedSupplier) result = result.filter(item => item.supplierId === selectedSupplier);
-    if (selectedGroup) result = result.filter(item => item.groupName === selectedGroup);
-    const query = searchQuery.trim().toLowerCase();
-    if (query) result = result.filter(item =>
-      item.itemName.toLowerCase().includes(query) ||
-      item.itemCode.toLowerCase().includes(query) ||
-      (item.barcode && item.barcode.toLowerCase().includes(query))
-    );
-    return result;
-  }, [items, searchQuery, selectedSupplier, selectedGroup]);
-
- 
+  // Debounce the search box so we hit the server at most once per pause.
   useEffect(() => {
-    const loadAll = async () => {
-      showLoading('Loading items...');
-      try {
-        await Promise.all([
-          fetchItems(),
-          fetchSuppliers(),
-          fetchCategories(),
-          fetchTaxes(),
-          fetchLocations(),
-        ]);
-      } finally {
-        hideLoading();
-      }
-    };
-    loadAll();
+    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 400);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  // Reset to first page whenever a filter, the search term, or page size changes.
+  useEffect(() => { setPage(1); }, [debouncedSearch, selectedSupplier, selectedGroup, pageSize]);
+
+  // Load the current page from the server whenever paging or filters change.
+  useEffect(() => {
+    fetchItems();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize, debouncedSearch, selectedSupplier, selectedGroup]);
+
+  // Auxiliary lookups only need to load once.
+  useEffect(() => {
+    fetchSuppliers();
+    fetchCategories();
+    fetchTaxes();
+    fetchLocations();
   }, []);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
   };
 
-
-
   const fetchItems = async () => {
     showLoading("Loading items...");
     try {
-      const response = await itemAPI.getItems();
-      setItems(response.data);
+      const response = await itemAPI.getPaginatedItems({
+        page,
+        limit: pageSize,
+        search: debouncedSearch || undefined,
+        supplierId: selectedSupplier || undefined,
+        groupName: selectedGroup || undefined,
+      });
+      setItems(response.data.items);
+      setTotal(response.data.pagination.total);
     } catch (error) {
       console.error("Error fetching items:", error);
       toast.error("Failed to load items");
@@ -265,22 +266,22 @@ const Items: React.FC = () => {
     }
     setErrors(prev => { const n = { ...prev }; delete n[field]; return n; });
     setFormData({ ...formData, [field]: val });
-    if (field === 'item_name' && val.trim()) {
-      const match = items.find(i => i.itemName.toLowerCase() === val.trim().toLowerCase());
-      if (match) toast.info(`Item "${match.itemName}" already exists (Code: ${match.itemCode})`, { toastId: 'item-name-match' });
-    }
   };
 
   const handleItemCodeBlur = async () => {
     if (!formData.item_code.trim() || editingItem) return;
-    const exists = items.find(i => i.itemCode.toLowerCase() === formData.item_code.trim().toLowerCase());
-    if (exists) {
-      setItemCodeExists(true);
-      setErrors(prev => ({ ...prev, item_code: `Item code "${formData.item_code}" already exists` }));
-      toast.warning(`Item code "${formData.item_code}" already exists`, { toastId: 'item-code-exists' });
-    } else {
-      setItemCodeExists(false);
-      setErrors(prev => { const n = { ...prev }; delete n.item_code; return n; });
+    try {
+      const res = await itemAPI.getItemByCode(formData.item_code.trim());
+      if (res.data) {
+        setItemCodeExists(true);
+        setErrors(prev => ({ ...prev, item_code: `Item code "${formData.item_code}" already exists` }));
+        toast.warning(`Item code "${formData.item_code}" already exists`, { toastId: 'item-code-exists' });
+      } else {
+        setItemCodeExists(false);
+        setErrors(prev => { const n = { ...prev }; delete n.item_code; return n; });
+      }
+    } catch {
+      // Ignore lookup failures; the server still enforces uniqueness on submit.
     }
   };
 
@@ -419,14 +420,34 @@ const Items: React.FC = () => {
 
   const exportToPDF = async () => {
     const doc = new jsPDF();
-    const exportItems = [...filteredItems].sort((a, b) =>
-      new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
-    );
+
+    // The table shows one page; export every item matching the current filters.
+    let exportItems: Item[] = [];
+    showLoading('Preparing export...');
+    try {
+      const res = await itemAPI.getPaginatedItems({
+        page: 1,
+        limit: 100000,
+        search: debouncedSearch || undefined,
+        supplierId: selectedSupplier || undefined,
+        groupName: selectedGroup || undefined,
+      });
+      exportItems = [...res.data.items].sort((a: Item, b: Item) =>
+        new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
+      );
+    } catch {
+      toast.error('Failed to prepare export');
+      hideLoading();
+      return;
+    } finally {
+      hideLoading();
+    }
+
     const supplierLabel = selectedSupplier
       ? suppliers.find(s => s.supplierId === selectedSupplier)?.supplierName
       : null;
     const groupLabel = selectedGroup
-      ? group.find(g => g.typeName === selectedGroup)?.typeName
+      ? group.find(g => g.typeId === selectedGroup)?.typeName
       : null;
     const exportDate = new Date().toLocaleString();
 
@@ -558,13 +579,13 @@ const Items: React.FC = () => {
         >
           <option value="">All Groups</option>
           {group.map(g => (
-            <option key={g.typeId} value={g.typeName}>{g.typeName}</option>
+            <option key={g.typeId} value={g.typeId}>{g.typeName}</option>
           ))}
         </select>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-        {filteredItems.length === 0 ? (
+        {items.length === 0 ? (
           <div className="p-8 text-center">
             <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-900 mb-2">
@@ -599,7 +620,7 @@ const Items: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {filteredItems.map((item) => (
+                {items.map((item) => (
                   <tr key={item.itemId} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">
                       {item.itemCode}
@@ -654,6 +675,16 @@ const Items: React.FC = () => {
               </tbody>
             </table>
           </div>
+        )}
+        {total > 0 && (
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            totalItems={total}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            label="items"
+          />
         )}
       </div>
 

@@ -4,6 +4,7 @@ import { supplierAPI } from '../services/api';
 import { useLoading } from '../context/LoadingContext';
 import { toast } from 'react-toastify';
 import SimpleBulkUploadModal from '../components/SimpleBulkUploadModal';
+import Pagination from '../components/Pagination';
 import { parseSupplierFile, downloadSupplierTemplate } from '../utils/excelParser';
 
 interface Supplier {
@@ -27,28 +28,35 @@ const Suppliers: React.FC = () => {
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [formData, setFormData] = useState({ supplierName: '', contactPerson: '', email: '', secondaryEmail: '', phone: '', SecondaryPhone: '', address: '', vatId: '', taxId: '', ibanNumber: '' });
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const { showLoading, hideLoading } = useLoading();
 
-  const filteredSuppliers = suppliers
-    .filter((s) => {
-      const q = searchQuery.toLowerCase();
-      return (
-        s.supplierName.toLowerCase().includes(q) ||
-        (s.email?.toLowerCase().includes(q) ?? false) ||
-        (s.secondaryEmail?.toLowerCase().includes(q) ?? false)
-      );
-    })
-    .sort((a, b) => a.supplierName.localeCompare(b.supplierName));
+  // Debounce the search box so we query the server at most once per pause.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 400);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  useEffect(() => { setPage(1); }, [debouncedSearch, pageSize]);
 
   useEffect(() => {
     fetchSuppliers();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize, debouncedSearch]);
 
   const fetchSuppliers = async () => {
     try {
-      const response = await supplierAPI.getSuppliers();
-      setSuppliers(response.data);
+      const response = await supplierAPI.getPaginatedSuppliers({
+        page,
+        limit: pageSize,
+        search: debouncedSearch || undefined,
+      });
+      setSuppliers(response.data.suppliers);
+      setTotal(response.data.pagination.total);
     } catch (error) {
       console.error('Error fetching suppliers:', error);
     }
@@ -149,8 +157,8 @@ const Suppliers: React.FC = () => {
         {suppliers.length === 0 ? (
           <div className="p-8 text-center">
             <Truck className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">No Suppliers Yet</h2>
-            <p className="text-gray-600">Add your first supplier to get started.</p>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">{debouncedSearch ? 'No matching suppliers' : 'No Suppliers Yet'}</h2>
+            <p className="text-gray-600">{debouncedSearch ? 'Try a different search term.' : 'Add your first supplier to get started.'}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -166,9 +174,7 @@ const Suppliers: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {filteredSuppliers.length === 0 ? (
-                  <tr><td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-500">No suppliers match your search.</td></tr>
-                ) : filteredSuppliers.map((supplier) => (
+                {suppliers.map((supplier) => (
                   <tr key={supplier.supplierId} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{supplier.supplierName}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">{supplier.contactPerson || '-'}</td>
@@ -193,6 +199,16 @@ const Suppliers: React.FC = () => {
               </tbody>
             </table>
           </div>
+        )}
+        {total > 0 && (
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            totalItems={total}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            label="suppliers"
+          />
         )}
       </div>
 

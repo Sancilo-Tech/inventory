@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useEffect } from "react";
-import { Package, ChevronDown, ChevronUp, Download, DollarSign } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { Package, ChevronDown, ChevronUp, Download, DollarSign, Search } from "lucide-react";
 import { reportAPI } from "../services/api";
 import { useLoading } from "../context/LoadingContext";
 import { toast } from "react-toastify";
+import Pagination from "../components/Pagination";
 
 interface GroupedItem {
   groupId: string;
@@ -18,11 +19,27 @@ const GroupedProducts: React.FC = () => {
   const [groupedItems, setGroupedItems] = useState<GroupedItem[]>([]);
   const [totalInventoryWorth, setTotalInventoryWorth] = useState(0);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const { showLoading, hideLoading } = useLoading();
 
   useEffect(() => {
     fetchGroupedProducts();
   }, []);
+
+  // Filter and paginate the groups in the browser (the full-set worth total below is unaffected).
+  const filteredGroups = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return q ? groupedItems.filter(g => g.groupName.toLowerCase().includes(q)) : groupedItems;
+  }, [groupedItems, searchQuery]);
+
+  useEffect(() => { setPage(1); }, [searchQuery, pageSize]);
+
+  const paginatedGroups = useMemo(
+    () => filteredGroups.slice((page - 1) * pageSize, page * pageSize),
+    [filteredGroups, page, pageSize]
+  );
 
   const fetchGroupedProducts = async () => {
     showLoading("Loading grouped products...");
@@ -128,14 +145,25 @@ const GroupedProducts: React.FC = () => {
         </button>
       </div>
 
+      <div className="relative mb-4">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Search by group name..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+        />
+      </div>
+
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-        {groupedItems.length === 0 ? (
+        {filteredGroups.length === 0 ? (
           <div className="p-8 text-center">
             <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              No Grouped Products Yet
+              {searchQuery.trim() ? 'No matching groups' : 'No Grouped Products Yet'}
             </h2>
-            <p className="text-gray-600">Add items with groups to see grouped products.</p>
+            <p className="text-gray-600">{searchQuery.trim() ? 'Try a different search term.' : 'Add items with groups to see grouped products.'}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -160,8 +188,8 @@ const GroupedProducts: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {groupedItems.map((group, index) => (
-                  <React.Fragment key={index}>
+                {paginatedGroups.map((group) => (
+                  <React.Fragment key={group.groupId || group.groupName}>
                     <tr className="hover:bg-gray-50">
                       <td className="px-6 py-4 text-sm font-medium text-gray-900">
                         {group.groupName}
@@ -262,6 +290,16 @@ const GroupedProducts: React.FC = () => {
               </tbody>
             </table>
           </div>
+        )}
+        {filteredGroups.length > 0 && (
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            totalItems={filteredGroups.length}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            label="groups"
+          />
         )}
       </div>
     </div>

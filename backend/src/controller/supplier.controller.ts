@@ -32,6 +32,36 @@ export class SupplierController {
             next(error)
         }
     }
+    static async getPaginatedSuppliers(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { page = 1, limit = 10, search } = req.query;
+            const take = Math.min(Number(limit) || 10, 500);
+            const skip = (Math.max(Number(page) || 1, 1) - 1) * take;
+
+            const where: any = {};
+            if (search && String(search).trim()) {
+                const q = String(search).trim();
+                where.OR = [
+                    { supplierName: { contains: q, mode: 'insensitive' } },
+                    { contactPerson: { contains: q, mode: 'insensitive' } },
+                    { email: { contains: q, mode: 'insensitive' } },
+                    { phone: { contains: q, mode: 'insensitive' } },
+                ];
+            }
+
+            const [suppliers, total] = await Promise.all([
+                prisma.supplierMaster.findMany({ where, orderBy: { supplierName: 'asc' }, skip, take }),
+                prisma.supplierMaster.count({ where }),
+            ]);
+
+            res.json({
+                suppliers,
+                pagination: { total, page: Number(page), limit: take, totalPages: Math.ceil(total / take) },
+            });
+        } catch (error) {
+            next(error)
+        }
+    }
     static async getSupplierById(req: Request, res: Response, next: NextFunction) {
         try {
             const id = req.params.supplierId

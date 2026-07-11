@@ -5,6 +5,7 @@ import { Download, Printer, TrendingUp, TrendingDown, IndianRupee, Package, Cale
 import { reportAPI, supplierAPI, categoriesAPI, invoiceAPI } from '../services/api';
 import { useLoading } from '../context/LoadingContext';
 import { toast } from 'react-toastify';
+import Pagination from '../components/Pagination';
 
 const Reports: React.FC = () => {
   const [activeTab, setActiveTab] = useState('transactions');
@@ -34,7 +35,9 @@ const Reports: React.FC = () => {
   const [checkinInvoiceSupplier, setCheckinInvoiceSupplier] = useState('');
   const [checkinInvoiceDateFilter, setCheckinInvoiceDateFilter] = useState('last30days');
   const [expandedCheckinInvoice, setExpandedCheckinInvoice] = useState<string | null>(null);
-  const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 0 });
+  const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 0 });
+  const [checkinPage, setCheckinPage] = useState(1);
+  const [checkinPageSize, setCheckinPageSize] = useState(10);
   const { showLoading, hideLoading } = useLoading();
 
   useEffect(() => {
@@ -62,7 +65,7 @@ const Reports: React.FC = () => {
     } else if (activeTab === 'checkinInvoices') {
       fetchCheckinInvoices();
     }
-  }, [activeTab, dateFilter, pagination.page, supplierId, categoryId, seasonalMonth, seasonalCategory, checkinInvoiceDateFilter, checkinInvoiceSupplier]);
+  }, [activeTab, dateFilter, pagination.page, pagination.limit, supplierId, categoryId, seasonalMonth, seasonalCategory, checkinInvoiceDateFilter, checkinInvoiceSupplier]);
 
   const fetchSuppliers = async () => {
     try {
@@ -299,6 +302,7 @@ const Reports: React.FC = () => {
       if (checkinInvoiceSupplier) params.supplierId = checkinInvoiceSupplier;
       const response = await invoiceAPI.getCheckinInvoices(params);
       setCheckinInvoices(response.data);
+      setCheckinPage(1);
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to load check-in invoices');
     } finally {
@@ -626,28 +630,15 @@ const Reports: React.FC = () => {
         </div>
 
         {/* Pagination */}
-        {pagination.totalPages > 1 && (
-          <div className="p-4 border-t border-gray-200 flex items-center justify-between">
-            <p className="text-sm text-gray-600">
-              Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} transactions
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPagination({ ...pagination, page: pagination.page - 1 })}
-                disabled={pagination.page === 1}
-                className="px-4 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => setPagination({ ...pagination, page: pagination.page + 1 })}
-                disabled={pagination.page === pagination.totalPages}
-                className="px-4 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+        {pagination.total > 0 && (
+          <Pagination
+            page={pagination.page}
+            pageSize={pagination.limit}
+            totalItems={pagination.total}
+            onPageChange={(p) => setPagination({ ...pagination, page: p })}
+            onPageSizeChange={(s) => setPagination({ ...pagination, limit: s, page: 1 })}
+            label="transactions"
+          />
         )}
       </div>
       )}
@@ -1303,7 +1294,7 @@ const Reports: React.FC = () => {
                       </td>
                     </tr>
                   ) : (
-                    checkinInvoices.map((inv: any) => (
+                    checkinInvoices.slice((checkinPage - 1) * checkinPageSize, checkinPage * checkinPageSize).map((inv: any) => (
                       <React.Fragment key={inv.invoiceId}>
                         <tr className="hover:bg-gray-50">
                           <td className="px-5 py-3 text-sm font-medium text-gray-900">{inv.invoiceNumber}</td>
@@ -1344,14 +1335,31 @@ const Reports: React.FC = () => {
                                       <td className="py-1 text-gray-900">{li.itemName}</td>
                                       <td className="py-1 text-gray-500">{li.itemCode}</td>
                                       <td className="py-1 text-right">{li.quantity}</td>
-                                      <td className="py-1 text-right">€{Number(li.rate).toFixed(2)}</td>
+                                      <td className="py-1 text-right">€{Number(li.rate).toFixed(3)}</td>
                                       <td className="py-1 text-right">{li.taxPercent}%</td>
-                                      <td className="py-1 text-right text-orange-600">€{Number(li.taxAmount).toFixed(2)}</td>
-                                      <td className="py-1 text-right font-semibold">€{Number(li.totalAmount).toFixed(2)}</td>
+                                      <td className="py-1 text-right text-orange-600">€{Number(li.taxAmount).toFixed(3)}</td>
+                                      <td className="py-1 text-right font-semibold">€{Number(li.totalAmount).toFixed(3)}</td>
                                     </tr>
                                   ))}
                                 </tbody>
                               </table>
+
+                              {/* Tax segregation — one row per tax rate in this invoice */}
+                              {inv.taxGroups?.length > 0 && (
+                                <div className="mt-3 pt-3 border-t border-blue-100">
+                                  <p className="text-xs font-semibold text-gray-600 mb-2">Tax breakdown by rate:</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {inv.taxGroups.map((g: any, idx: number) => (
+                                      <div key={idx} className="bg-white border border-blue-100 rounded-lg px-3 py-1.5 text-xs">
+                                        <span className="font-semibold text-gray-700">Tax {g.percent}%</span>
+                                        <span className="text-gray-500"> · Base €{Number(g.base).toFixed(3)} · </span>
+                                        <span className="text-orange-600 font-semibold">Tax €{Number(g.tax).toFixed(3)}</span>
+                                        <span className="text-gray-700"> · Total €{Number(g.total).toFixed(3)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </td>
                           </tr>
                         )}
@@ -1361,6 +1369,16 @@ const Reports: React.FC = () => {
                 </tbody>
               </table>
             </div>
+            {checkinInvoices.length > 0 && (
+              <Pagination
+                page={checkinPage}
+                pageSize={checkinPageSize}
+                totalItems={checkinInvoices.length}
+                onPageChange={setCheckinPage}
+                onPageSizeChange={(s) => { setCheckinPageSize(s); setCheckinPage(1); }}
+                label="invoices"
+              />
+            )}
           </div>
         </div>
       )}

@@ -3,6 +3,7 @@ import { X, FileText, AlertCircle } from 'lucide-react';
 import { invoiceAPI, supplierAPI } from '../services/api';
 import { calcPricing } from '../utils/pricing';
 import { toast } from 'react-toastify';
+import SearchableSelect from './SearchableSelect';
 
 interface ScannedItem {
   itemId: string;
@@ -154,16 +155,14 @@ const FinalizeCheckinModal: React.FC<Props> = ({ scannedItems, onSuccess, onCanc
 
           {/* Supplier */}
           {field('Supplier *', errors.supplierId,
-            <select
+            <SearchableSelect
               value={form.supplierId}
-              onChange={e => { setForm(p => ({ ...p, supplierId: e.target.value })); setErrors(p => ({ ...p, supplierId: undefined })); }}
-              className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-green-500 ${errors.supplierId ? 'border-red-400' : 'border-gray-300'}`}
-            >
-              <option value="">Select supplier...</option>
-              {suppliers.map(s => (
-                <option key={s.supplierId} value={s.supplierId}>{s.supplierName}</option>
-              ))}
-            </select>
+              onChange={val => { setForm(p => ({ ...p, supplierId: val })); setErrors(p => ({ ...p, supplierId: undefined })); }}
+              options={suppliers.map(s => ({ value: s.supplierId, label: s.supplierName }))}
+              placeholder="Select supplier..."
+              invalid={!!errors.supplierId}
+              focusRing="focus:ring-green-500"
+            />
           )}
 
           {/* Invoice Date */}

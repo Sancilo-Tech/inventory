@@ -6,7 +6,7 @@ import { useLocation } from '../context/LocationContext';
 import { useLoading } from '../context/LoadingContext';
 import { toast } from 'react-toastify';
 import { calcPricing } from '../utils/pricing';
-import ItemSearchAutocomplete, { SearchableItem } from '../components/ItemSearchAutocomplete';
+import ItemSearchAutocomplete from '../components/ItemSearchAutocomplete';
 
 interface ItemMaster {
   itemId: string;
@@ -58,8 +58,8 @@ const CheckOut: React.FC = () => {
     try { const res = await productAPI.getTodayStats(); setTodayStats(res.data); } catch { /* silent */ }
   };
 
-  const handleSelectItem = (item: ItemMaster | SearchableItem) => {
-    if (item.currentQty <= 0) {
+  const handleSelectItem = (item: ItemMaster) => {
+    if ((item.currentQty ?? 0) <= 0) {
       toast.error(`"${item.itemName}" is not available (out of stock)`);
       return;
     }
@@ -172,7 +172,7 @@ const CheckOut: React.FC = () => {
         {/* Search panel */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Scan / Search Item</h2>
-          <ItemSearchAutocomplete items={allItems} onSelect={handleSelectItem} color="red" />
+          <ItemSearchAutocomplete items={allItems} onSelect={handleSelectItem as (item: any) => void} color="red" />
           <p className="mt-2 text-xs text-gray-400">Scan a barcode, or type an item code / name and pick from the list.</p>
 
           {/* Grand total summary */}

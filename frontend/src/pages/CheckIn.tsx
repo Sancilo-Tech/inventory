@@ -9,7 +9,7 @@ import { useLoading } from "../context/LoadingContext";
 import { toast } from "react-toastify";
 import { calcPricing, isPriceChanged } from "../utils/pricing";
 import FinalizeCheckinModal from "../components/FinalizeCheckinModal";
-import ItemSearchAutocomplete from "../components/ItemSearchAutocomplete";
+import ItemSearchAutocomplete, { SearchableItem } from "../components/ItemSearchAutocomplete";
 
 interface ItemMaster {
   itemId: string;
@@ -63,7 +63,7 @@ const CheckIn: React.FC = () => {
     } catch { /* silent */ }
   };
 
-  const handleSelectItem = (item: ItemMaster) => {
+  const handleSelectItem = (item: ItemMaster | SearchableItem) => {
     addItemToBatch(item);
     toast.success("Item added");
   };

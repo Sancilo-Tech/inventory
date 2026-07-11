@@ -6,7 +6,7 @@ import { useLocation } from '../context/LocationContext';
 import { useLoading } from '../context/LoadingContext';
 import { toast } from 'react-toastify';
 import { calcPricing } from '../utils/pricing';
-import ItemSearchAutocomplete from '../components/ItemSearchAutocomplete';
+import ItemSearchAutocomplete, { SearchableItem } from '../components/ItemSearchAutocomplete';
 
 interface ItemMaster {
   itemId: string;
@@ -58,7 +58,7 @@ const CheckOut: React.FC = () => {
     try { const res = await productAPI.getTodayStats(); setTodayStats(res.data); } catch { /* silent */ }
   };
 
-  const handleSelectItem = (item: ItemMaster) => {
+  const handleSelectItem = (item: ItemMaster | SearchableItem) => {
     if (item.currentQty <= 0) {
       toast.error(`"${item.itemName}" is not available (out of stock)`);
       return;
